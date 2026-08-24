@@ -9,51 +9,55 @@ It prints a LAN address. Everyone on the same wifi opens that, types a name, and
 starts adding words. There is no turn order, which is the point.
 
     python server.py --cooldown 0     no rate limit at all
-    python server.py --ai             enable the second-opinion layer
     python server.py --port 8080
 
 THE PIPELINE
 ------------
-Each word takes one of four routes, and only one of them is slow.
+Every word takes a dictionary lookup and nothing else. Nothing on this path waits
+for anything.
 
-    dictionary says blocked   -> rejected instantly, sender is told
-    dictionary says allowed   -> published instantly
-    dictionary found nothing  -> published instantly
-    dictionary is unsure      -> held for the AI, under a second typically, then
-                                 rejected if the model objects, or published and
-                                 flagged for the host if it does not
+    blocked         -> rejected instantly, only the sender is told
+    near a blocked  -> published instantly, and underlined for the host
+    clean           -> published instantly
 
-Only the last route ever makes anybody wait, and on a 250-word test set it was
-taken 6 times. Everything else is a dictionary lookup in microseconds.
+The host can remove any word at any time with one click, which also writes it into
+the dictionary so it is caught instantly from then on.
 
-The AI is never asked about a word the dictionary was happy with. Measured on that
-same test set, left to audit ordinary vocabulary it wanted to block "kill", "die"
-and "niggle", and deleting somebody's ordinary word is worse here than missing a
-rare one.
+WHY THERE IS NO MODEL IN HERE
+-----------------------------
+There was, briefly. It was measured and removed.
 
-The host can withdraw any word at any time, which also adds it to the dictionary
-so it is caught instantly from then on.
+The best local model tested answered in ~750 ms warm and idle. With thirty people
+typing that becomes a queue, on the same laptop that is serving all of them, with
+a multi-gigabyte model resident in RAM. And it did not buy anything: on a 250-case
+labelled set the dictionary alone scored 250/250, while the model scored 228/250,
+missed every regional-language term it was shown, and wanted to block "kill" and
+"die".
+
+The model is still used, just not here. expand.py runs it BEFORE the session to
+propose new dictionary entries for a human to approve, where taking a second per
+word costs nobody anything.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
+import secrets
 import socket
 import time
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from filter import Auditor, Decision, Dictionary
+from filter import Decision, Dictionary
 
 HERE = Path(__file__).parent
 MAX_WORD_LEN = 40
 MAX_NAME_LEN = 24
-HOLD_TIMEOUT = 6.0   # seconds a borderline word waits on the AI before going live
 
 
 @dataclass
@@ -68,15 +72,13 @@ class Word:
 class Room:
     """All the state. One room, which is all a single workshop needs."""
 
-    def __init__(self, cooldown: float, use_ai: bool):
+    def __init__(self, cooldown: float):
         self.words: list[Word] = []
         self.clients: dict[WebSocket, str] = {}
         self.last_post: dict[str, float] = {}
         self.blocked_count = 0
         self.cooldown = cooldown
-        self.use_ai = use_ai
         self.dictionary = Dictionary()
-        self.auditor = Auditor()
         self.lock = asyncio.Lock()
 
     # -- sending ------------------------------------------------------------
@@ -102,7 +104,6 @@ class Room:
             "words": [asdict(w) for w in self.words],
             "users": sorted(set(self.clients.values())),
             "blocked": self.blocked_count,
-            "ai": bool(self.use_ai and self.auditor.available),
         }
 
     async def broadcast_presence(self) -> None:
@@ -136,39 +137,19 @@ class Room:
             await self.reject(ws, text, verdict.micros)
             return
 
-        # Tier 1 was unsure. Hold it and ask tier 2. This is the only path that
-        # ever makes anybody wait, and it is rare.
+        # Tier 1 was unsure: near a blocked term but not a match. Publish it and
+        # flag it, so the host sees it underlined and can remove it with one click.
+        #
+        # Nothing waits for a model here. That was tried and removed. Even at its
+        # best a local model answered in about 750 ms warm and idle, which with
+        # thirty people typing turns into a queue, on the same laptop that is
+        # serving all of them. The dictionary scores 250/250 on the test set
+        # without it. See expand.py for where the model is genuinely useful.
         if verdict.decision is Decision.REVIEW:
-            if not self.use_ai:
-                # No second opinion available, so publish and flag it for a human.
-                await self.publish(name, text, verdict.micros, flagged=True)
-                return
-            await self.send(ws, {"type": "holding", "word": text})
-            try:
-                objected = await asyncio.wait_for(
-                    self.auditor.check(text), timeout=HOLD_TIMEOUT)
-            except asyncio.TimeoutError:
-                objected = None
-            if objected is True:
-                await self.reject(ws, text, verdict.micros, tier=2)
-                return
-            # The model cleared it, or could not be reached. Publish it either way,
-            # but ALWAYS flag it for the host, whatever the model said. Tier 1 was
-            # suspicious for a reason, and the model is measurably unreliable on
-            # exactly this class of word: on the 250-case set it waved through
-            # every regional-language term it was shown. Its opinion is worth
-            # having and is not worth trusting on its own.
             await self.publish(name, text, verdict.micros, flagged=True)
             return
 
         # Tier 1 found nothing to worry about, so it goes straight up.
-        #
-        # The AI is deliberately NOT consulted here. It was tested on 250 labelled
-        # words and, left to audit ordinary vocabulary, it wanted to block "kill",
-        # "die" and "niggle". In a story-writing game, deleting somebody's
-        # perfectly good word is worse than missing a rare one, and the host can
-        # remove anything that slips through. So tier 2 only ever arbitrates words
-        # tier 1 already found suspicious.
         await self.publish(name, text, verdict.micros)
 
     async def reject(self, ws: WebSocket, text: str, micros: int, tier: int = 1) -> None:
@@ -226,15 +207,7 @@ class Room:
 
 
 def make_app(room: Room, host_key: str) -> FastAPI:
-    @asynccontextmanager
-    async def lifespan(_: FastAPI):
-        if room.use_ai:
-            found = await room.auditor.ping()
-            print(f"  AI layer: {found}" if found
-                  else "  AI layer: NO MODEL REACHABLE, continuing without it")
-        yield
-
-    app = FastAPI(title="Chaos Draft", lifespan=lifespan)
+    app = FastAPI(title="Chaos Draft")
 
     @app.get("/")
     async def index():
@@ -307,14 +280,19 @@ def main() -> None:
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--cooldown", type=float, default=1.0,
                    help="Seconds a person waits between words. 0 disables it.")
-    p.add_argument("--ai", action="store_true",
-                   help="Second-opinion layer via a local ollama model.")
-    p.add_argument("--host-key", default="host",
-                   help="Secret that unlocks the host controls. Append ?key=... to the URL.")
+    p.add_argument("--host-key",
+                   help="Secret that unlocks the host controls. A random one is "
+                        "generated if you do not set this, which is the safe default.")
     args = p.parse_args()
 
-    room = Room(cooldown=args.cooldown, use_ai=args.ai)
-    app = make_app(room, args.host_key)
+    # A fixed default would be worthless. This repository is public, so any
+    # default written down here or in the README is a key everybody in the room
+    # already has, and the host controls include wiping the story for everyone.
+    # Random per run, printed only in the host's own terminal.
+    host_key = args.host_key or secrets.token_urlsafe(9)
+
+    room = Room(cooldown=args.cooldown)
+    app = make_app(room, host_key)
 
     ip = lan_ip()
     d = room.dictionary
@@ -323,10 +301,11 @@ def main() -> None:
     print(f"  dictionary: {len(d.exact)} terms, {len(d.contains)} roots, "
           f"{len(d.allow)} protected")
     print()
-    print(f"  Everyone opens:  http://{ip}:{args.port}")
-    print(f"  You open:        http://{ip}:{args.port}/?key={args.host_key}")
+    print(f"  Everyone opens:   http://{ip}:{args.port}")
+    print(f"  Host controls:    http://{ip}:{args.port}/?key={host_key}")
+    print("                    ^ yours only. Do not put this on the projector.")
     print()
-    print(f"  Cooldown: {args.cooldown}s   AI layer: {'on' if args.ai else 'off'}")
+    print(f"  Cooldown: {args.cooldown}s")
     print("  Edit wordlist.txt during the session and it takes effect immediately.")
     print()
 

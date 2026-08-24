@@ -80,7 +80,6 @@
     color:var(--ink);outline:none}
   #word:focus{border-color:var(--accent)}
   #word.shake{animation:shake .4s;border-color:var(--bad)}
-  #word.wait{border-color:var(--warn);opacity:.7}
   @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}
     40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
   #send{padding:13px 22px;font-size:15px;font-weight:600;background:var(--accent);
@@ -235,20 +234,13 @@ function connect(){
       story.scrollTop = story.scrollHeight;
       $("n-words").textContent = countLive();
       if (m.word.author === me){
-        $("word").classList.remove("wait");
         flash("");   // clear any lingering notice now one has gone through
         if (m.micros !== undefined) $("speed").textContent = `checked in ${m.micros}µs`;
       }
     }
 
-    else if (m.type === "holding"){
-      $("word").classList.add("wait");
-      flash("Checking that one…", "warn");
-    }
-
     else if (m.type === "rejected"){
       const w = $("word");
-      w.classList.remove("wait");
       w.classList.add("shake");
       setTimeout(() => w.classList.remove("shake"), 400);
       flash(m.reason, "bad");

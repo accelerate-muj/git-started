@@ -44,12 +44,20 @@ python server.py
 The server prints two addresses:
 
 ```
-  Everyone opens:  http://192.168.1.42:8000
-  You open:        http://192.168.1.42:8000/?key=host
+  Everyone opens:   http://192.168.1.42:8000
+  Host controls:    http://192.168.1.42:8000/?key=XXXXXXXXXXXX
+                    ^ yours only. Do not put this on the projector.
 ```
 
-Put the first on the projector. Open the second yourself. It is the same page plus
-the host controls, which nobody else gets.
+Put the **first** on the projector. Open the **second** yourself.
+
+The second one is the same page plus the controls that let you remove words and
+wipe the story. The key in it is generated fresh every time you start the server
+and is printed only in your own terminal. There is no fixed default, deliberately:
+this repository is public, so any key written down here would be a key everyone in
+the room already has.
+
+Keep that URL to yourself. If it leaks, restart the server and you get a new one.
 
 Needs Python 3.9 or newer.
 
@@ -75,42 +83,66 @@ python server.py --port 8080
 ```
 
 ```bash
-python server.py --host-key something-else
+python server.py --host-key your-own-secret
 ```
 
-Changes the secret in your host URL, if you would rather people did not guess it.
-
-```bash
-python server.py --ai
-```
-
-Turns on the second-opinion check described below. Off by default.
+Pins the host key instead of generating a random one, so your host URL survives a
+restart. Only worth it if you have already sent yourself the link. Do not pick
+something guessable.
 
 ---
 
 ## How the filtering works
 
-Three layers, in order, so the fast one does almost all the work.
+Three layers, and only the first one runs while people are typing.
 
-**1. Dictionary.** A list of terms to block, in English, Hindi and several other
-Indian languages. Words are normalised before being looked up, so spacing,
+**1. Dictionary.** A list of terms to block, in English, Hindi, Devanagari and
+eight other Indian languages. Words are normalised before lookup, so spacing,
 punctuation, number substitutions, stretched letters and alternative spellings all
-collapse onto the same entry. This answers in well under a millisecond and handles
-the overwhelming majority of cases.
+collapse onto the same entry. If a word is not an exact match but is very close to
+one, it still goes up but is underlined for the host.
 
-**2. AI.** For words that look close to a blocked term but are not an exact match,
-a small language model running locally on the same laptop gives a second opinion.
-This is slower, so it only ever sees the handful of borderline words in a session,
-never ordinary ones. Off by default, enable with `--ai`. It needs
-[ollama](https://ollama.com) running with a model pulled:
+This is the whole runtime path. Measured end to end, browser to server and back,
+firing words as fast as a machine can send them: **median 14 ms, worst case 19 ms.**
+
+**2. You.** Click any underlined word, or any word at all, to remove it. It is also
+written into the dictionary, so it is caught instantly from then on.
+
+**3. A model, before the session.** `expand.py` uses a local language model to
+propose new dictionary entries, which you approve one at a time. It runs beforehand,
+never during.
+
+### Why the model does not run during the session
+
+It used to. It was measured and removed.
+
+The best local model tested answered in about 750 ms per word, warm and idle. With
+thirty people typing that becomes a queue, on the same laptop that is also serving
+all of them, with a multi-gigabyte model sitting in RAM.
+
+It also was not earning its place. On a 250-word labelled test set:
+
+| | Dictionary | Model |
+|---|---|---|
+| Correct | 250 / 250 | 228 / 250 |
+| Let something through | 0 | 15 |
+| Blocked an ordinary word | 0 | 7 |
+| Time per word | under 0.03 ms | ~750 ms |
+
+The model missed every regional-language term it was shown, and wanted to block
+`kill`, `die` and `niggle`. In a story-writing game, deleting somebody's ordinary
+word is worse than missing a rare one.
+
+So the model now does its work in advance, where being slow costs nobody anything,
+and everything it finds becomes a dictionary entry that costs microseconds at run
+time.
 
 ```bash
-ollama pull gemma4:e2b
+python expand.py --seed <a term already blocked>
 ```
 
-**3. You.** The host can remove any word that got through, at any time, with one
-click. Removing it also adds it to the dictionary permanently, so it is caught
-instantly from then on.
+It proposes spellings and variants, discards anything already covered or that would
+clash with ordinary vocabulary, and asks you before writing anything.
 
 ### Adding a term mid-session
 
@@ -156,8 +188,10 @@ Shows what the dictionary does with a set of sample inputs, and how long it take
 python test_ai.py
 ```
 
-Runs the AI layer against a labelled test set and reports how many things it got
-wrong in each direction. Takes about ten minutes.
+Runs the model against the 250-word labelled set and reports how many it got wrong
+in each direction. Only relevant if you are changing `expand.py`. Takes about ten
+minutes, because the model is slow, which is the entire reason it is not in the
+live path.
 
 ---
 
@@ -192,5 +226,6 @@ lives on the server, so nothing is lost.
 | `filter.py` | The filtering logic. Run it directly to test. |
 | `wordlist.txt` | The terms to block, and the ordinary words to protect. |
 | `safe_words.txt` | Vocabulary used by the collision check. Not used at runtime. |
-| `test_ai.py` | Test suite for the AI layer. |
+| `expand.py` | Grows the dictionary before a session, using a model, with your approval. |
+| `test_ai.py` | Measures how accurate that model actually is. |
 | `static/index.html` | The whole page. No build step, no dependencies. |
