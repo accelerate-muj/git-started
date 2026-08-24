@@ -9,6 +9,17 @@ new thing in front of you at any moment is the git.
 
 ---
 
+## Before we start: Chaos Draft
+
+Fifteen minutes before the session proper, everyone writes one story together, one
+word each, no turn order. It falls apart quickly, which is the intention. A bot
+reads every word before it lands and eats the ones that should not be there, in
+English and Hindi, in about eight microseconds.
+
+It runs on one laptop over the room wifi. See [`chaos-draft/`](chaos-draft/).
+
+---
+
 ## Before you arrive
 
 Do [SETUP.md](SETUP.md). It takes ten minutes and it is the difference between

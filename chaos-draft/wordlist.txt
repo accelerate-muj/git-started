@@ -1,0 +1,194 @@
+# Blocklist for Chaos Draft.
+#
+# Two sections, and the difference matters.
+#
+#   [exact]     Must match the whole word after normalisation. Use this for short
+#               terms whose letters appear inside innocent words. "ass" goes here,
+#               because otherwise "class", "pass", "grass" and "assess" all die.
+#
+#   [contains]  Matched anywhere inside the word. Only for long, unambiguous roots
+#               that cannot appear inside anything harmless. "madarchod" goes here,
+#               so every one of its forty spellings is caught by one entry.
+#
+# Normalisation happens before matching, so you do NOT need to list variants with
+# leetspeak, punctuation, accents, or stretched letters. All of these already hit
+# the single entry "chutiya":
+#
+#   chutiya   ch00tiya   c-h-u-t-i-y-a   CHUTIYAAAAA   ch@tiya
+#
+# Lines starting with # are comments. Blank lines are ignored.
+# To add a term during a session, append it here and the server reloads it live.
+
+[exact]
+
+# --- English ---------------------------------------------------------------
+ass
+arse
+arsehole
+asshole
+bastard
+bitch
+bollocks
+bugger
+cock
+cunt
+dick
+dickhead
+dildo
+douche
+dyke
+fag
+faggot
+fuck
+fucker
+fucking
+fuk
+gtfo
+hoe
+jerkoff
+milf
+nigga
+nigger
+nutsack
+paki
+piss
+prick
+pussy
+retard
+retarded
+schlong
+scrotum
+shit
+shite
+skank
+slut
+spic
+tit
+tits
+titties
+tranny
+twat
+wank
+wanker
+whore
+
+# --- Hindi and Hinglish, romanised -----------------------------------------
+bakchod
+bakchodi
+balatkar
+bewda
+bhadwa
+bhadwe
+bhosda
+bhosdi
+chakka
+chinal
+choot
+chut
+chutad
+gaand
+gand
+gandu
+gandu
+harami
+haramzada
+haramzade
+hijra
+jhaat
+jhant
+kamina
+kaminey
+kutiya
+kutta
+lauda
+laude
+laundiya
+loda
+lode
+lund
+lundtopi
+madarjaat
+mamme
+patakha
+pataka
+raand
+randi
+randwa
+saala
+saale
+sali
+suar
+tatte
+tatti
+
+# --- Devanagari ------------------------------------------------------------
+गांड
+गांडू
+चूत
+चूतिया
+भोसड़ी
+भोसड़ीके
+मादरचोद
+बहनचोद
+रंडी
+लंड
+हरामी
+हरामजादा
+कमीना
+कुत्ता
+कुतिया
+साला
+भड़वा
+छिनाल
+झांट
+
+# --- Punjabi, Bhojpuri, Marathi, Bengali, romanised ------------------------
+bhenji
+bokachoda
+chinaal
+gaandu
+jhaatu
+khotya
+madarchya
+zavadya
+zavlo
+bhadva
+aaichya
+tuzya
+paji
+kanjar
+
+[contains]
+
+# Long roots. Every spelling variant of these collapses to one entry.
+madarchod
+madarchoda
+maderchod
+motherfuck
+behenchod
+bhenchod
+behanchod
+benchod
+bhainchod
+bhosdike
+bhosadike
+bhosdika
+bhosadi
+chutiya
+chutiye
+chutiyapa
+chodu
+chodna
+chudai
+chuda
+gaandmar
+gandmar
+lundfakir
+randibaaz
+harampanth
+suarkebacche
+kuttekebacche
+teramaa
+terimaa
+terikimaa
+madarjat

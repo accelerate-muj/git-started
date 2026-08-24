@@ -1,0 +1,10 @@
+# Chaos Draft server.
+# Python 3.9 or newer.
+#
+#   pip install -r requirements.txt
+
+fastapi>=0.100
+uvicorn>=0.23
+
+# Only needed for the optional --audit second opinion via ollama.
+# aiohttp>=3.9
