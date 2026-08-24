@@ -1,0 +1,134 @@
+name: Check poem submission
+
+# Advisory only. This never blocks a merge. It exists so that whoever is merging
+# thirty pull requests during a live workshop can see at a glance which ones follow
+# the filename rule, without opening each one.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'phase-2/poems/**'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect the changed files
+        id: inspect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          count=$(printf '%s\n' "$files" | grep -c . || true)
+          expected="phase-2/poems/${AUTHOR}.md"
+
+          # Case-insensitive compare: GitHub usernames are not case sensitive, but
+          # the filesystem in the repo is.
+          lower_files=$(printf '%s\n' "$files" | tr '[:upper:]' '[:lower:]')
+          lower_expected=$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')
+
+          verdict="ok"
+          note=""
+
+          if [ "$count" -ne 1 ]; then
+            verdict="multi"
+            note=$(printf '%s\n' "$files" | sed 's/^/- `/; s/$/`/')
+          elif [ "$lower_files" != "$lower_expected" ]; then
+            verdict="name"
+            note="$files"
+          fi
+
+          {
+            echo "verdict=$verdict"
+            echo "expected=$expected"
+            echo "count=$count"
+            echo "note<<__EOF__"
+            echo "$note"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Say so on the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          VERDICT: ${{ steps.inspect.outputs.verdict }}
+          EXPECTED: ${{ steps.inspect.outputs.expected }}
+          COUNT: ${{ steps.inspect.outputs.count }}
+          NOTE: ${{ steps.inspect.outputs.note }}
+        run: |
+          set -euo pipefail
+
+          case "$VERDICT" in
+            ok)
+              body=$(cat <<MSG
+          Looks right. One file, named \`$EXPECTED\`.
+
+          Nothing else to do, this is ready to merge.
+          MSG
+              )
+              ;;
+            multi)
+              body=$(cat <<MSG
+          This pull request changes **$COUNT files**. Phase 2 asks for exactly one:
+
+          \`\`\`
+          $EXPECTED
+          \`\`\`
+
+          Changed here:
+
+          $NOTE
+
+          The one file rule is what stops thirty submissions from conflicting with
+          each other. If you meant to edit something outside your own file, that is
+          Phase 3, and it is the whole point of Phase 3.
+
+          To fix: move your extra changes onto a separate branch, or \`git restore\`
+          the files you did not mean to touch and push again.
+
+          Nothing is blocked. A human can still merge this.
+          MSG
+              )
+              ;;
+            name)
+              body=$(cat <<MSG
+          Close. The file is named:
+
+          \`\`\`
+          $NOTE
+          \`\`\`
+
+          Phase 2 expects it to match your GitHub username:
+
+          \`\`\`
+          $EXPECTED
+          \`\`\`
+
+          To fix:
+
+          \`\`\`
+          git mv <current-name> $EXPECTED
+          git commit -m "Rename to match my username"
+          git push
+          \`\`\`
+
+          The pull request updates on its own once you push, no need to open a new one.
+
+          Nothing is blocked. A human can still merge this.
+          MSG
+              )
+              ;;
+          esac
+
+          printf '%s' "$body" | gh pr comment "$PR" --repo "$REPO" --body-file -
