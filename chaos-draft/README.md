@@ -2,8 +2,8 @@
 
 The warm-up activity, run in the fifteen minutes before the git workshop starts.
 
-Everyone writes one story together. One word each, no turn order, as fast as they
-can type. It falls apart almost immediately, which is the point.
+Everyone writes one story together, at the same time, in one shared document.
+It falls apart almost immediately, which is the point.
 
 It runs on one laptop. Everyone joins over the room wifi. Nothing leaves the
 network and nobody makes an account.
@@ -12,20 +12,24 @@ network and nobody makes an account.
 
 ## The activity
 
-1. The host starts the server and puts the address on the projector.
-2. Everyone opens it on a phone or laptop and types a name.
-3. Someone types the first word.
-4. Everybody else adds one word at a time, whenever they like.
+1. The host starts the server and shows the QR on the projector.
+2. Everyone scans it, types a name, and gets a line of their own in the document.
+3. Write. Whole sentences, backspace, edit what you wrote a minute ago. It is a
+   normal text editor.
+4. Press Enter to start another line. Everyone sees everyone else's lines appear
+   and change live.
 5. After ten minutes, read the result out loud.
 
-There is no turn order and no plan. Two people will try to steer the story in
-opposite directions at the same time, and that is the entire joke.
+There is no turn order and no plan. Two people will steer the story in opposite
+directions at the same time, and that is the entire joke.
 
-A filter checks every word before it reaches the page and quietly drops anything
+Lines are owned by whoever created them, so nobody can delete your sentence while
+you are halfway through it. The document still fills up chaotically, which is the
+part we actually wanted.
+
+A filter checks every word before anyone else sees it and removes anything
 inappropriate, in English and Hindi. Participants do not need to think about it.
-Everyone can see a counter of how many words it has dropped, but never which ones.
-
----
+Everyone sees a counter of how many words were removed, but never which ones.
 
 ## Running it
 

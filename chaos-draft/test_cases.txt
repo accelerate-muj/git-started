@@ -97,3 +97,11 @@ specialist penalty pen
 [allow:english-mild]
 idiot stupid silly annoying hate kill
 die dead blood fight angry damn
+
+[block:aspirated]
+madharchod gandhu bhosadhike bhenchodh chutiyah madharchodh
+gaandhu chodhu randhi haramdhi bhosadhi lundh
+
+[allow:aspirated-innocent]
+brother another weather though this that with chat shot
+shoulder chutney cut mother father gather rather either

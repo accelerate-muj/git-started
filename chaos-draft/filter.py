@@ -1,36 +1,50 @@
 """
-The three-tier gate for Chaos Draft.
+The filter for Chaos Draft. A dictionary lookup, and nothing slower.
 
-    Tier 1  DICTIONARY   microseconds, deterministic, catches the known set
-    Tier 2  AI           seconds, catches novel spellings the dictionary misses
-    Tier 3  HUMAN        the host, who catches what both of the above missed
+Every word typed into the shared document is checked here before anyone else sees
+it. There are three outcomes:
 
-A word takes one of four routes through tier 1:
+    in [allow]              ALLOW. Ordinary vocabulary, checked first so it wins.
+    in [exact]/[contains]   BLOCK. Removed from the text.
+    near a blocked term     BLOCK. Removed as well, see below.
+    nothing matched         ALLOW.
 
-    in [allow]           -> ALLOW immediately, tiers 2 and 3 never see it
-    in [exact]/[contains]-> BLOCK immediately, nothing else runs
-    near a blocked term  -> REVIEW, hand to tier 2, and to tier 3 if 2 is unsure
-    nothing matched      -> ALLOW
+WHY A NEAR MATCH IS BLOCKED AND NOT MERELY FLAGGED
+--------------------------------------------------
+An earlier version published near matches and underlined them for the host. That
+was wrong and it showed the first time somebody typed a variant spelling: the word
+appeared in the document, underlined, for the whole room to read. Underlining a
+slur is not filtering it. Near matches are removed, and the host is shown exactly
+what was removed so a false positive can be added to [allow].
 
-The REVIEW route is the important one and it is why this is not just a wordlist.
-Someone typing "chutlya" or "madrchod" is obviously trying it on, but neither is a
-dictionary entry and normalisation alone will not save you. Bounded edit distance
-catches them and routes them to the slower, smarter tiers.
+WHY THERE IS NO MODEL IN HERE
+-----------------------------
+There was, and it was measured and removed. See expand.py, which uses one offline
+to grow the dictionary, and test_filter.py, which measures how good it actually is.
 
-WHY THE AI IS TIER 2 AND NOT TIER 1
------------------------------------
-Measured on this machine before any of this was built. gemma3:1b, single-word
-classification, which is the easiest thing it could possibly be asked:
+The short version, on a 279-case labelled set: the dictionary gets all of them in
+microseconds. The best local model got 228/250, missed every regional-language
+term it was shown, wanted to block "kill" and "die", and took about 750 ms a word.
 
-    ~2500 ms per word          against a "minimum latency" requirement
-    allowed "behenchod"        one of the worst words in the language
-    allowed "randi"            likewise
-    blocked "kutta"            which means dog
-    blocked "saala"            mild, common, fine in a story
+NORMALISATION IS THE INTERESTING PART
+-------------------------------------
+People obfuscate, and a plain wordlist is beaten in seconds. Before lookup a word
+is lowercased, stripped of accents and punctuation, folded out of leetspeak, had
+stretched letters collapsed, had long-vowel spellings normalised, and had aspirated
+consonants stripped. All of those collapse many spellings onto one entry, so the
+dictionary carries one line instead of forty.
 
-It is too slow to gate a keystroke and too unreliable to trust alone. It is
-genuinely useful for the narrow job of second-guessing a handful of suspicious
-words per session, which is exactly what tier 2 is.
+The reverse danger matters just as much, and is easier to get wrong. Three real
+bugs found by the test suite, all of them ordinary words being destroyed or real
+ones being let through:
+
+    "aand"  folded to "and"     the commonest word in English, blocked
+    "ass"   flattened to "as"   likewise
+    "sheet" folded to a slur    which the allowlist then switched back on
+
+Hence MIN_VARIANT_LEN, the allow list being matched on base forms only, and
+`python filter.py --collisions`, which checks the whole dictionary against a
+corpus of ordinary vocabulary and must always come back clean.
 """
 from __future__ import annotations
 
@@ -77,6 +91,18 @@ FUZZY_LONG_LEN = 9
 # at least this long to be trusted. Run `python filter.py --collisions` to re-check.
 MIN_VARIANT_LEN = 4
 
+# Romanised Hindi is wildly inconsistent about aspirated consonants. The same word
+# is written with and without the h: "madarchod" and "madharchod", "gandu" and
+# "gandhu", "bhosdike" and "bhosadhike". All three of those got through a version
+# of this file, which is how this rule came to exist.
+#
+# Stripping h after a consonant collapses them onto one entry. It is only done for
+# longer words, because on short ones it collides with ordinary English: "chut"
+# would become "cut". Applied to the dictionary and the input alike, so both sides
+# land on the same form.
+ASPIRATE = re.compile(r"(?<=[bcdgjkpstz])h")
+ASPIRATE_MIN_LEN = 5
+
 
 def indexable(word: str) -> list[str]:
     """
@@ -89,7 +115,15 @@ def indexable(word: str) -> list[str]:
     forms = normalise(word)
     if not forms:
         return []
-    return [forms[0]] + [f for f in forms[1:] if len(f) >= MIN_VARIANT_LEN]
+    out = [forms[0]] + [f for f in forms[1:] if len(f) >= MIN_VARIANT_LEN]
+
+    for form in list(out):
+        if len(form) >= ASPIRATE_MIN_LEN:
+            stripped = ASPIRATE.sub("", form)
+            if stripped != form and len(stripped) >= MIN_VARIANT_LEN + 1 \
+                    and stripped not in out:
+                out.append(stripped)
+    return out
 
 
 def allowable(word: str) -> list[str]:

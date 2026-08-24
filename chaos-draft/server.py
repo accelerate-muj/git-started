@@ -1,48 +1,45 @@
 """
-Chaos Draft: a collaborative story, one word at a time, with a filter in the way.
+Chaos Draft: a shared document that thirty people write at the same time.
 
 Run it on the machine that will act as the server:
 
     python server.py
 
-It prints a LAN address. Everyone on the same wifi opens that, types a name, and
-starts adding words. There is no turn order, which is the point.
+It prints a LAN address and a QR code. Everyone on the same wifi or hotspot scans
+it, types a name, and starts writing. There is no turn order, which is the point.
 
-    python server.py --cooldown 0     no rate limit at all
     python server.py --port 8080
+    python server.py --new-key        rotate the host link if it leaks
 
-THE PIPELINE
-------------
-Every word takes a dictionary lookup and nothing else. Nothing on this path waits
-for anything.
+HOW THE DOCUMENT WORKS
+----------------------
+The story is a list of lines. Everyone owns the lines they created and types into
+them freely: whole sentences, backspace, edit what you wrote a minute ago. You see
+everybody else's lines appearing and changing live.
 
-    blocked         -> rejected instantly, only the sender is told
-    near a blocked  -> published instantly, and underlined for the host
-    clean           -> published instantly
+Lines are owned rather than shared because thirty people typing into one string
+means thirty people deleting each other's characters. Per-line ownership gives
+normal typing with no clobbering, and the document still fills up chaotically,
+which is the part we actually wanted.
 
-The host can remove any word at any time with one click, which also writes it into
-the dictionary so it is caught instantly from then on.
+FILTERING
+---------
+Every edit is sanitised server-side before anyone else sees it. Each word is
+checked against the dictionary in filter.py, which answers in microseconds, and
+anything blocked is removed from the text before it is stored or broadcast.
 
-WHY THERE IS NO MODEL IN HERE
------------------------------
-There was, briefly. It was measured and removed.
-
-The best local model tested answered in ~750 ms warm and idle. With thirty people
-typing that becomes a queue, on the same laptop that is serving all of them, with
-a multi-gigabyte model resident in RAM. And it did not buy anything: on a 250-case
-labelled set the dictionary alone scored 250/250, while the model scored 228/250,
-missed every regional-language term it was shown, and wanted to block "kill" and
-"die".
-
-The model is still used, just not here. expand.py runs it BEFORE the session to
-propose new dictionary entries for a human to approve, where taking a second per
-word costs nobody anything.
+A word is only complete once you stop typing it, so abuse disappears as you finish
+the word. The person typing is told what was removed. Nobody else sees it, they
+just see the counter move. The host sees everything, which is the only way to know
+the filter is working, and the only way to spot one person repeatedly trying it on.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
+import re
 import secrets
 import socket
 import time
@@ -51,34 +48,38 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from filter import Decision, Dictionary
 
 HERE = Path(__file__).parent
-MAX_WORD_LEN = 40
+KEY_FILE = HERE / ".host-key"
+MAX_LINE_LEN = 600
 MAX_NAME_LEN = 24
+MAX_LINES = 400
+
+# Split on whitespace but keep it, so the text can be rebuilt exactly minus the
+# words that were removed.
+TOKENS = re.compile(r"(\s+)")
 
 
 @dataclass
-class Word:
-    i: int
-    text: str
+class Line:
+    id: int
     author: str
-    flagged: bool = False
+    text: str = ""
     ts: float = field(default_factory=time.time)
 
 
 class Room:
     """All the state. One room, which is all a single workshop needs."""
 
-    def __init__(self, cooldown: float):
-        self.words: list[Word] = []
+    def __init__(self) -> None:
+        self.lines: list[Line] = []
+        self.next_id = 1
         self.clients: dict[WebSocket, str] = {}
         self.hosts: set[WebSocket] = set()
-        self.last_post: dict[str, float] = {}
         self.blocked_count = 0
-        self.cooldown = cooldown
         self.dictionary = Dictionary()
         self.lock = asyncio.Lock()
 
@@ -88,21 +89,24 @@ class Room:
         with suppress(Exception):
             await ws.send_text(json.dumps(payload))
 
-    async def broadcast(self, payload: dict) -> None:
+    async def broadcast(self, payload: dict, skip: WebSocket | None = None) -> None:
         message = json.dumps(payload)
         dead = []
         for ws in list(self.clients):
+            if ws is skip:
+                continue
             try:
                 await ws.send_text(message)
             except Exception:
                 dead.append(ws)
         for ws in dead:
             self.clients.pop(ws, None)
+            self.hosts.discard(ws)
 
     def snapshot(self) -> dict:
         return {
             "type": "state",
-            "words": [asdict(w) for w in self.words],
+            "lines": [asdict(l) for l in self.lines],
             "users": sorted(set(self.clients.values())),
             "blocked": self.blocked_count,
         }
@@ -111,112 +115,141 @@ class Room:
         await self.broadcast({"type": "presence",
                               "users": sorted(set(self.clients.values()))})
 
-    # -- the pipeline -------------------------------------------------------
+    # -- filtering ----------------------------------------------------------
 
-    async def submit(self, ws: WebSocket, name: str, raw: str) -> None:
-        text = " ".join(raw.split())[:MAX_WORD_LEN]
-        if not text:
-            return
-        if " " in text:
-            await self.send(ws, {"type": "rejected", "word": text,
-                                 "reason": "One word at a time. That is the whole game."})
-            return
+    def sanitise(self, text: str) -> tuple[str, list[str], int]:
+        """
+        Remove any blocked word from a line, keeping everything else exactly.
 
-        now = time.time()
-        elapsed = now - self.last_post.get(name, 0.0)
-        if self.cooldown and elapsed < self.cooldown:
-            await self.send(ws, {"type": "rejected", "word": text,
-                                 "reason": f"Slow down, {self.cooldown - elapsed:.1f}s to go."})
-            return
-
-        # Picks up edits to wordlist.txt mid-session without a restart.
+        Returns the clean text, the words taken out, and how long the checking
+        took in microseconds.
+        """
         self.dictionary.reload_if_changed()
-        verdict = self.dictionary.check(text)
 
-        # Tier 1 said no. Nothing else runs.
-        if verdict.decision is Decision.BLOCK:
-            await self.reject(ws, text, verdict.micros)
-            return
+        kept: list[str] = []
+        removed: list[str] = []
+        micros = 0
 
-        # Tier 1 was unsure: near a blocked term but not a match. Publish it and
-        # flag it, so the host sees it underlined and can remove it with one click.
-        #
-        # Nothing waits for a model here. That was tried and removed. Even at its
-        # best a local model answered in about 750 ms warm and idle, which with
-        # thirty people typing turns into a queue, on the same laptop that is
-        # serving all of them. The dictionary scores 250/250 on the test set
-        # without it. See expand.py for where the model is genuinely useful.
-        if verdict.decision is Decision.REVIEW:
-            await self.publish(name, text, verdict.micros, flagged=True)
-            return
+        for token in TOKENS.split(text):
+            if not token.strip():
+                kept.append(token)
+                continue
+            verdict = self.dictionary.check(token)
+            micros += verdict.micros
+            # Anything the dictionary is not happy with comes out. A near match
+            # is treated as a match: underlining a slur is not filtering it.
+            if verdict.decision is Decision.ALLOW:
+                kept.append(token)
+            else:
+                removed.append(token)
 
-        # Tier 1 found nothing to worry about, so it goes straight up.
-        await self.publish(name, text, verdict.micros)
+        clean = "".join(kept)
+        # Collapse the double spaces left where a word was removed.
+        clean = re.sub(r"[ \t]{2,}", " ", clean)
+        return clean, removed, micros
 
-    async def reject(self, ws: WebSocket, text: str, micros: int, tier: int = 1) -> None:
-        self.blocked_count += 1
-        name = self.clients.get(ws, "someone")
+    # -- editing ------------------------------------------------------------
 
-        # The sender is told, and nobody else in the room is. Everyone just sees
-        # the counter move, which keeps the filter part of the game without
-        # putting the word up on the projector.
-        await self.send(ws, {"type": "rejected", "word": text,
-                             "reason": "Not that one.", "micros": micros, "tier": tier})
-        await self.broadcast({"type": "blocked_count", "blocked": self.blocked_count})
+    async def edit(self, ws: WebSocket, name: str, line_id: int, raw: str) -> None:
+        text = raw[:MAX_LINE_LEN]
 
-        # The host does see it. During a session that is how you notice one person
-        # repeatedly trying it on. It is also the only way to demonstrate that the
-        # filter is doing anything at all, since by design the evidence is invisible.
-        for host in list(self.hosts):
-            await self.send(host, {"type": "caught", "word": text,
-                                   "author": name, "micros": micros})
-
-    async def publish(self, name: str, text: str, micros: int,
-                      flagged: bool = False) -> Word | None:
         async with self.lock:
-            word = Word(i=len(self.words), text=text, author=name, flagged=flagged)
-            self.words.append(word)
-        self.last_post[name] = time.time()
-        await self.broadcast({"type": "word", "word": asdict(word), "micros": micros})
-        return word
+            line = next((l for l in self.lines if l.id == line_id), None)
+            if line is None or line.author != name:
+                return                      # not yours, or gone
 
-    # -- tier 3, the host ---------------------------------------------------
+        clean, removed, micros = self.sanitise(text)
 
-    async def withdraw(self, i: int, learn: bool) -> None:
-        """Remove a word that is already live, and optionally remember it."""
         async with self.lock:
-            if not (0 <= i < len(self.words)):
+            line.text = clean
+
+        # Everyone else sees the clean version. The author is only sent an update
+        # if something was taken out, otherwise the echo fights their cursor.
+        await self.broadcast({"type": "line", "line": asdict(line)}, skip=ws)
+
+        if removed:
+            self.blocked_count += len(removed)
+            await self.send(ws, {"type": "scrubbed", "id": line.id, "text": clean,
+                                 "removed": removed, "micros": micros})
+            await self.broadcast({"type": "blocked_count",
+                                  "blocked": self.blocked_count})
+            for host in list(self.hosts):
+                await self.send(host, {"type": "caught", "words": removed,
+                                       "author": name, "micros": micros})
+
+    async def new_line(self, ws: WebSocket, name: str) -> None:
+        async with self.lock:
+            if len(self.lines) >= MAX_LINES:
                 return
-            text = self.words[i].text
-            if not text:
-                return
-            self.words[i].text = ""
-            self.words[i].flagged = False
-            self.blocked_count += 1
-        if learn and text:
-            with suppress(Exception):
-                self.dictionary.add(text)
-        await self.broadcast({"type": "withdrawn", "i": i,
-                              "blocked": self.blocked_count})
+            line = Line(id=self.next_id, author=name)
+            self.next_id += 1
+            self.lines.append(line)
+        await self.broadcast({"type": "line", "line": asdict(line)})
+        await self.send(ws, {"type": "yours", "id": line.id})
 
-    async def undo(self) -> None:
+    # -- the host -----------------------------------------------------------
+
+    async def remove_line(self, line_id: int, learn: bool) -> None:
         async with self.lock:
-            if self.words:
-                self.words.pop()
-        await self.broadcast(self.snapshot())
+            line = next((l for l in self.lines if l.id == line_id), None)
+            if line is None:
+                return
+            text = line.text
+            self.lines = [l for l in self.lines if l.id != line_id]
+
+        if learn and text.strip():
+            # Only teach it single words. Learning a whole sentence would put a
+            # phrase in the dictionary that never matches anything again.
+            words = [w for w in text.split() if w.strip()]
+            if len(words) == 1:
+                with suppress(Exception):
+                    self.dictionary.add(words[0])
+
+        await self.broadcast({"type": "removed", "id": line_id})
 
     async def reset(self) -> None:
         async with self.lock:
-            self.words.clear()
+            self.lines.clear()
             self.blocked_count = 0
-        self.last_post.clear()
         await self.broadcast(self.snapshot())
 
     def as_text(self) -> str:
-        return " ".join(w.text for w in self.words if w.text)
+        return "\n".join(l.text for l in self.lines if l.text.strip())
 
 
-def make_app(room: Room, host_key: str) -> FastAPI:
+def qr_svg(url: str) -> str:
+    """A QR for the join URL, as inline SVG so the page needs no image files."""
+    import qrcode
+    import qrcode.image.svg
+
+    img = qrcode.make(url, image_factory=qrcode.image.svg.SvgPathImage,
+                      box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return buf.getvalue().decode("utf-8")
+
+
+def qr_ascii(url: str) -> str:
+    """A QR for the terminal, so you can point a phone at the laptop screen."""
+    import qrcode
+
+    q = qrcode.QRCode(border=1)
+    q.add_data(url)
+    q.make(fit=True)
+    m = q.get_matrix()
+    out = []
+    # Two rows per line using half-block characters, so it fits in a terminal.
+    for y in range(0, len(m), 2):
+        row = ""
+        for x in range(len(m[0])):
+            top = m[y][x]
+            bottom = m[y + 1][x] if y + 1 < len(m) else False
+            row += "█" if top and bottom else "▀" if top else "▄" if bottom else " "
+        out.append(row)
+    return "\n".join(out)
+
+
+def make_app(room: Room, host_key: str, join_url: str) -> FastAPI:
     app = FastAPI(title="Chaos Draft")
 
     @app.get("/")
@@ -226,6 +259,17 @@ def make_app(room: Room, host_key: str) -> FastAPI:
     @app.get("/story.txt", response_class=PlainTextResponse)
     async def story():
         return room.as_text()
+
+    @app.get("/qr.svg")
+    async def qr():
+        try:
+            return Response(qr_svg(join_url), media_type="image/svg+xml")
+        except Exception:
+            return Response("", media_type="image/svg+xml")
+
+    @app.get("/join-url", response_class=PlainTextResponse)
+    async def join():
+        return join_url
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -251,14 +295,18 @@ def make_app(room: Room, host_key: str) -> FastAPI:
                                          "isHost": is_host})
                     await room.broadcast_presence()
 
-                elif kind == "word" and name:
-                    await room.submit(ws, name, str(msg.get("text", "")))
+                elif not name:
+                    continue
 
-                elif is_host and kind == "withdraw":
-                    await room.withdraw(int(msg.get("i", -1)),
-                                        learn=bool(msg.get("learn", True)))
-                elif is_host and kind == "undo":
-                    await room.undo()
+                elif kind == "edit":
+                    await room.edit(ws, name, int(msg.get("id", -1)),
+                                    str(msg.get("text", "")))
+                elif kind == "newline":
+                    await room.new_line(ws, name)
+
+                elif is_host and kind == "remove":
+                    await room.remove_line(int(msg.get("id", -1)),
+                                           learn=bool(msg.get("learn", True)))
                 elif is_host and kind == "reset":
                     await room.reset()
 
@@ -275,49 +323,8 @@ def make_app(room: Room, host_key: str) -> FastAPI:
     return app
 
 
-KEY_FILE = HERE / ".host-key"
-
-
-def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
-    """
-    Work out the host key, and say where it came from.
-
-    Order of preference:
-      1. --host-key on the command line, for when you want to choose it yourself
-      2. .host-key next to this file, so the URL survives a restart
-      3. a fresh random one, saved to .host-key for next time
-
-    There is deliberately no fixed default. This repository is public, so any key
-    written into the code or the README would be a key everybody in the room
-    already has, and the host controls include wiping the story for everyone.
-
-    .host-key is gitignored. It should never be committed.
-    """
-    if explicit:
-        return explicit, "from --host-key"
-
-    if rotate and KEY_FILE.exists():
-        KEY_FILE.unlink()
-
-    if KEY_FILE.exists():
-        saved = KEY_FILE.read_text(encoding="utf-8").strip()
-        if saved:
-            return saved, f"reused from {KEY_FILE.name}"
-
-    key = secrets.token_urlsafe(9)
-    try:
-        KEY_FILE.write_text(key + "\n", encoding="utf-8")
-        # Best effort. Does very little on Windows, and costs nothing to try.
-        with suppress(Exception):
-            KEY_FILE.chmod(0o600)
-        return key, f"new, saved to {KEY_FILE.name}"
-    except OSError:
-        # Read-only checkout or similar. Still works, just not across restarts.
-        return key, "new, could not be saved"
-
-
 def lan_ip() -> str:
-    """Best guess at the address other machines can reach, without sending traffic."""
+    """Best guess at the address other devices can reach, without sending traffic."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("10.255.255.255", 1))
@@ -328,38 +335,72 @@ def lan_ip() -> str:
         s.close()
 
 
+def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
+    """
+    Work out the host key, and say where it came from.
+
+      1. --host-key on the command line
+      2. .host-key next to this file, so the URL survives a restart
+      3. a fresh random one, saved for next time
+
+    There is deliberately no fixed default. This repository is public, so any key
+    written into the code or the README would be a key everybody in the room
+    already has, and the host controls include wiping the story.
+    """
+    if explicit:
+        return explicit, "from --host-key"
+    if rotate and KEY_FILE.exists():
+        KEY_FILE.unlink()
+    if KEY_FILE.exists():
+        saved = KEY_FILE.read_text(encoding="utf-8").strip()
+        if saved:
+            return saved, f"reused from {KEY_FILE.name}"
+    key = secrets.token_urlsafe(9)
+    try:
+        KEY_FILE.write_text(key + "\n", encoding="utf-8")
+        with suppress(Exception):
+            KEY_FILE.chmod(0o600)
+        return key, f"new, saved to {KEY_FILE.name}"
+    except OSError:
+        return key, "new, could not be saved"
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Chaos Draft server")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", default="0.0.0.0")
-    p.add_argument("--cooldown", type=float, default=1.0,
-                   help="Seconds a person waits between words. 0 disables it.")
     p.add_argument("--host-key",
                    help="Pin the host key yourself. Otherwise one is generated and "
                         "remembered in .host-key so your URL survives a restart.")
     p.add_argument("--new-key", action="store_true",
                    help="Throw away the saved key and generate a new one.")
+    p.add_argument("--ip", help="Override the detected address, if it guesses wrong.")
     args = p.parse_args()
 
+    room = Room()
     host_key, key_origin = host_key_for_run(args.host_key, args.new_key)
+    ip = args.ip or lan_ip()
+    join_url = f"http://{ip}:{args.port}"
+    app = make_app(room, host_key, join_url)
 
-    room = Room(cooldown=args.cooldown)
-    app = make_app(room, host_key)
-
-    ip = lan_ip()
     d = room.dictionary
     print()
     print("  Chaos Draft")
     print(f"  dictionary: {len(d.exact)} terms, {len(d.contains)} roots, "
           f"{len(d.allow)} protected")
     print()
-    print(f"  Everyone opens:   http://{ip}:{args.port}")
-    print(f"  Host controls:    http://{ip}:{args.port}/?key={host_key}")
-    print(f"                    ^ yours only, {key_origin}.")
-    print("                    Same after a restart. Do not put it on the projector.")
+    try:
+        print(qr_ascii(join_url))
+        print()
+    except Exception:
+        pass
+    print(f"  Everyone scans that, or opens:  {join_url}")
+    print(f"  Your host link:                 {join_url}/?key={host_key}")
+    print(f"                                  ^ yours only, {key_origin}.")
+    print("                                  Do not put it on the projector.")
     print()
-    print(f"  Cooldown: {args.cooldown}s")
-    print("  Edit wordlist.txt during the session and it takes effect immediately.")
+    print("  The join QR is also on the page itself, under the QR button.")
+    print("  Edit wordlist.txt during the session and it applies immediately.")
     print()
 
     import uvicorn
