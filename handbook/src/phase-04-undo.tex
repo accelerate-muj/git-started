@@ -1,0 +1,462 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{4}
+\phasetitle{Undo}
+\phasesubtitle{Every way to take it back, and the one way you cannot.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 4: Undo},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{The premise}
+
+Most people are frightened of git for one reason. They believe that if they type
+the wrong thing, work disappears.
+
+This is almost never true, and the gap between ``almost never'' and what people
+believe is where all the fear lives. Git is built to hoard. It keeps things you
+deleted, commits you abandoned, branches you removed, and the position of your
+\co{HEAD} pointer going back ninety days. Undoing something in git is usually not
+recovery at all, it is just moving a pointer back to something that never actually
+went anywhere.
+
+This phase covers every undo git has. By the end you should be willing to try
+things, which matters more than any single command here.
+
+\begin{why}
+Confidence is a real engineering skill. A developer who is afraid of their tools
+works slowly, avoids branches, commits huge unreviewable lumps, and never
+experiments. Learning the undos first is what buys you permission to be careless
+later.
+\end{why}
+
+\section{The three trees}
+
+Every undo command in git is answering the same question: \emph{which of the three
+trees am I changing?}
+
+\begin{description}
+  \item[The working directory] The files as they exist on disk right now. What
+    your editor shows you.
+  \item[The index, also called the staging area] What will go into the next commit.
+    \co{git add} copies from the working directory into here.
+  \item[HEAD] The commit you currently have checked out. The last recorded state.
+\end{description}
+
+When you run \co{git status} and it lists things in two groups, those groups are
+``working directory differs from index'' and ``index differs from HEAD''. That is
+the whole output.
+
+Hold on to this. Every command below is a different combination of which trees get
+touched, and if you know the three trees you can predict what any of them does
+without memorising anything.
+
+\section{Undoing work you have not committed}
+
+\subsection{Throw away changes to a file}
+
+You edited a file, you made it worse, you want the version from the last commit.
+
+\begin{shell}
+git restore sonnet.md
+\end{shell}
+
+The file on disk is replaced with the one in \co{HEAD}.
+
+\begin{trap}
+This is the single most dangerous command in this document. The edits you made
+were never committed, so git never had a copy, so there is nothing to recover.
+This is one of the few genuine ways to lose work in git.
+
+Before running it on something you might want, either commit it or stash it.
+Committing on a scratch branch costs nothing and is always reversible.
+\end{trap}
+
+\subsection{Unstage a file}
+
+You ran \co{git add} on something you did not mean to include.
+
+\begin{shell}
+git restore --staged secrets.env
+\end{shell}
+
+This copies the file from \co{HEAD} back into the index. Your edits on disk are
+untouched, the file is simply no longer queued for the next commit.
+
+\begin{why}
+\co{git restore} was added in Git 2.23, in 2019, together with \co{git switch}.
+Before that both jobs were done by \co{git checkout}, which also changed branches,
+also restored files, and also created branches. One command, three unrelated jobs,
+and the flags that separated them were not memorable.
+
+Older tutorials will tell you \co{git checkout -- file} and \co{git reset HEAD file}.
+Both still work. \co{restore} and \co{switch} exist because the maintainers agreed
+the old interface was the problem, not you.
+\end{why}
+
+\subsection{Delete files git has never seen}
+
+\co{git restore} only knows about tracked files. Build output, stray downloads, and
+half-finished experiments are untracked, so it ignores them.
+
+\begin{shell}
+git clean -n
+git clean -fd
+\end{shell}
+
+\co{-n} is a dry run and prints what would be deleted. \co{-f} actually does it,
+\co{-d} includes directories.
+
+\begin{trap}
+Always run \co{git clean -n} first. Always. This command deletes files git has no
+record of, which means there is no version of them anywhere. It is the other
+genuine way to lose work.
+\end{trap}
+
+\section{Undoing the commit you just made}
+
+\subsection{You want to change the message}
+
+\begin{shell}
+git commit --amend -m "A message that is actually useful"
+\end{shell}
+
+\subsection{You forgot to include a file}
+
+\begin{shell}
+git add the-file-you-forgot.md
+git commit --amend --no-edit
+\end{shell}
+
+\co{--no-edit} keeps the existing message.
+
+Here is the thing to understand about \co{--amend}: it does not edit anything.
+Commits in git are immutable. What actually happens is that git builds a brand new
+commit from the current index, gives it the same parent as the old one, and moves
+your branch to point at the new commit. The old commit is still sitting in the
+object database, unreferenced, and the reflog still knows where it is.
+
+\begin{trap}
+Amending rewrites history. If you have already pushed the commit, your local branch
+and the remote branch now disagree, and an ordinary push will be rejected. You will
+need \co{git push --force-with-lease}, and everyone who already pulled the old
+commit will have a bad afternoon.
+
+The rule: amend freely before you push, think hard afterwards.
+\end{trap}
+
+\section{git reset, and its three modes}
+
+This is the command people find genuinely confusing, and the confusion is entirely
+because it has three modes that do three different amounts of work. The three trees
+make it simple.
+
+\co{git reset} moves your branch pointer to a different commit. The mode decides
+what happens to the index and the working directory.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.6cm} X@{}}
+\toprule
+\rhtablehead{Mode} & \rhtablehead{What it changes} \\
+\midrule
+\co{--soft} & Moves \co{HEAD} only. Index and working directory untouched. Your
+changes are still staged, ready to be recommitted. \\
+\co{--mixed} & Moves \co{HEAD} and resets the index. Your changes survive on disk
+but are unstaged. \emph{This is the default.} \\
+\co{--hard} & Moves \co{HEAD}, resets the index, and overwrites the working
+directory. Your changes are gone from all three trees. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+Read that table as a ladder. Each mode does everything the one above it does, plus
+one more tree.
+
+\subsection{Undo the last commit but keep the work}
+
+The one you will use most often. You committed too early, or committed two unrelated
+things together.
+
+\begin{shell}
+git reset --soft HEAD~1
+\end{shell}
+
+The commit is gone, the changes are staged exactly as they were. Fix the grouping,
+commit again properly.
+
+\co{HEAD\textasciitilde 1} means ``one commit before HEAD''. \co{HEAD\textasciitilde 3}
+means three before. You will see \co{HEAD\^{}} used the same way for the single step
+case.
+
+\subsection{Undo the last commit and unstage}
+
+\begin{shell}
+git reset HEAD~1
+\end{shell}
+
+Same as above but the changes come back unstaged. Useful when you want to re-add
+selectively with \co{git add -p}.
+
+\subsection{Destroy the last commit entirely}
+
+\begin{shell}
+git reset --hard HEAD~1
+\end{shell}
+
+\begin{trap}
+\co{--hard} is the flag with a reputation, and it half deserves it. The
+\emph{commit} is recoverable through the reflog, covered in a moment. But any
+uncommitted changes sitting in your working directory at the time are overwritten,
+and those were never in git, so those really are gone.
+
+Committed work: recoverable. Uncommitted work: not. That distinction is the entire
+danger and it is worth reading twice.
+\end{trap}
+
+\begin{tryit}
+Do this in a scratch repo right now, because reading about it is not the same as
+watching it.
+
+\begin{shell}
+mkdir reset-demo && cd reset-demo && git init
+echo one > f.txt && git add . && git commit -m "one"
+echo two >> f.txt && git add . && git commit -m "two"
+
+git reset --soft HEAD~1 && git status
+git reset --hard HEAD && cat f.txt
+git reflog
+\end{shell}
+
+Watch \co{git status} after the soft reset, and notice the change is still staged.
+Then look at the reflog and find the commit you just destroyed.
+\end{tryit}
+
+\section{Undoing something that is already public}
+
+Everything above rewrites history, which is fine on your own machine and rude on a
+shared branch. When a bad commit is already on \co{main} and other people have
+pulled it, you do not remove it. You add a new commit that reverses it.
+
+\begin{shell}
+git revert a1b2c3d
+\end{shell}
+
+This creates a fresh commit whose content is the exact inverse of \co{a1b2c3d}.
+History gains a commit rather than losing one. Nobody else's clone breaks, because
+nothing they already have has changed.
+
+\begin{why}
+Rewriting shared history is antisocial for a mechanical reason, not a stylistic one.
+Your teammate's branch is built on commits that, after your rewrite, no longer
+exist. Their next pull produces a mess that they have to untangle and that they did
+not cause.
+
+The standard formulation: \textbf{rewrite your own unpushed history freely, never
+rewrite history other people are building on.} Reset for private work, revert for
+public work.
+\end{why}
+
+To revert a merge commit you have to tell git which side to keep, because a merge
+has two parents:
+
+\begin{shell}
+git revert -m 1 <merge-sha>
+\end{shell}
+
+\co{-m 1} means ``keep the first parent'', which is the branch you merged into,
+normally \co{main}.
+
+\section{The reflog}
+
+This is the safety net under every other command in this document, and it is the
+single most valuable thing in this phase.
+
+Git records every position \co{HEAD} has occupied. Every commit, checkout, merge,
+rebase, reset, and amend appends a line. Not just commits on branches, but every
+intermediate state, including ones you have since abandoned.
+
+\begin{shell}
+git reflog
+\end{shell}
+
+\begin{terminal}
+a1b2c3d HEAD@{0}: reset: moving to HEAD~1
+9f8e7d6 HEAD@{1}: commit: two
+5c4b3a2 HEAD@{2}: commit: one
+\end{terminal}
+
+\co{HEAD@\{1\}} is where \co{HEAD} was one move ago. To go back:
+
+\begin{shell}
+git reset --hard HEAD@{1}
+\end{shell}
+
+Or, better, put the recovered commit somewhere safe rather than moving your branch:
+
+\begin{shell}
+git switch -c rescued 9f8e7d6
+\end{shell}
+
+\subsection{Recovering a deleted branch}
+
+You deleted a branch you still needed.
+
+\begin{shell}
+git reflog
+git switch -c the-branch-i-deleted <sha>
+\end{shell}
+
+The branch name was only ever a label pointing at a commit. Deleting it removed the
+label. The commit was untouched, and the reflog remembers the number.
+
+\subsection{Recovering from a rebase that went wrong}
+
+A rebase leaves a trail. Find the commit from just before you started:
+
+\begin{shell}
+git reflog
+git reset --hard HEAD@{5}
+\end{shell}
+
+Git also stores the pre-rebase position in \co{ORIG\_HEAD}, so this often works
+straight away:
+
+\begin{shell}
+git reset --hard ORIG_HEAD
+\end{shell}
+
+\subsection{When the reflog is not enough}
+
+If a commit is not in the reflog and not on any branch, it is still in the object
+database until garbage collection runs. Find orphans with:
+
+\begin{shell}
+git fsck --lost-found
+\end{shell}
+
+This lists dangling commits and blobs. Inspect one with \co{git show <sha>}, and if
+it is what you wanted, \co{git switch -c recovered <sha>}.
+
+\begin{deeper}
+Unreferenced objects survive for ninety days by default, controlled by
+\co{gc.reflogExpire} and \co{gc.pruneExpire}. Git runs \co{gc} automatically when
+loose objects pile up.
+
+Which means the honest version of ``git never loses anything'' is: git does not
+lose anything for about three months, as long as it was committed at least once.
+Everything in this phase depends on that word \emph{committed}. Committing early
+and often is not a discipline for other people's benefit, it is what makes you
+recoverable.
+\end{deeper}
+
+\section{Stash}
+
+Sometimes you do not want to undo work, you want to put it down for ten minutes.
+
+\begin{shell}
+git stash
+git stash pop
+\end{shell}
+
+\co{stash} takes your uncommitted changes, saves them, and gives you a clean working
+directory. \co{pop} puts them back and removes the saved copy.
+
+Useful in practice:
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{5.6cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{What it does} \\
+\midrule
+\co{git stash push -m "half a fix"} & Save with a label you will recognise \\
+\co{git stash list} & Show everything you have stashed \\
+\co{git stash show -p stash@\{1\}} & Look at one as a diff before applying it \\
+\co{git stash apply} & Restore but keep the stash as well \\
+\co{git stash pop} & Restore and delete the stash \\
+\co{git stash -u} & Include untracked files \\
+\co{git stash branch fix} & Make a new branch from a stash \\
+\co{git stash drop stash@\{0\}} & Delete one \\
+\co{git stash clear} & Delete all of them \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{trap}
+The stash is a stack and it is easy to treat as a filing cabinet. Six unlabelled
+stashes from three weeks ago are useless, because you will never work out which is
+which and you will never dare delete any of them.
+
+If work is worth keeping for more than an hour, it is worth a branch and a commit.
+Branches have names.
+\end{trap}
+
+\begin{note}
+Stashes are reachable through \co{git fsck} even after \co{git stash drop},
+because they are ordinary commit objects. A dropped stash is recoverable for the
+usual ninety days, though finding it takes effort.
+\end{note}
+
+\section{Choosing the right undo}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.4cm} X@{}}
+\toprule
+\rhtablehead{Situation} & \rhtablehead{Command} \\
+\midrule
+Edited a file, want the committed version & \co{git restore <file>} \\
+Staged something by mistake & \co{git restore -{}-staged <file>} \\
+Untracked junk to delete & \co{git clean -n} then \co{git clean -fd} \\
+Bad commit message, not pushed & \co{git commit -{}-amend} \\
+Forgot a file in the last commit & \co{git add <f>} then \co{git commit -{}-amend -{}-no-edit} \\
+Committed too early, want the work back & \co{git reset -{}-soft HEAD\textasciitilde 1} \\
+Want the last commit gone completely & \co{git reset -{}-hard HEAD\textasciitilde 1} \\
+Bad commit already pushed to main & \co{git revert <sha>} \\
+Deleted a branch you needed & \co{git reflog} then \co{git switch -c <name> <sha>} \\
+Rebase went wrong & \co{git reset -{}-hard ORIG\_HEAD} \\
+Need to set work aside briefly & \co{git stash} \\
+Cannot find a commit anywhere & \co{git fsck -{}-lost-found} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\section{What genuinely cannot be recovered}
+
+Short list, and worth knowing exactly:
+
+\begin{enumerate}
+  \item \textbf{Changes never committed or stashed}, destroyed by
+    \co{git restore}, \co{git checkout} or \co{git reset --hard}. Git never held a
+    copy.
+  \item \textbf{Untracked files} removed by \co{git clean}. Same reason.
+  \item \textbf{Anything already garbage collected}, roughly ninety days after it
+    became unreachable.
+  \item \textbf{A repository you deleted from disk}, unless it was pushed somewhere.
+\end{enumerate}
+
+Every item on that list is a variation of the same sentence: git can only give you
+back what it was given. The habit that follows is commit early, commit often, push
+regularly. A commit costs nothing and buys you three months of insurance.
+
+\checkyourself{
+\begin{enumerate}
+  \item Name the three trees, and say which ones \co{--soft}, \co{--mixed} and
+    \co{--hard} each touch.
+  \item You committed too early and want the changes back, staged. Which command?
+  \item Why is \co{git revert} correct for a pushed commit when \co{git reset} is not?
+  \item You deleted a branch an hour ago. Walk through recovering it.
+  \item Which two commands in this phase can genuinely destroy work, and what do
+    they have in common?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 5, \emph{Rewriting history}, where you stop undoing commits and
+start reshaping them: interactive rebase, squashing, splitting a commit in half, and
+moving a commit from one branch to another.
+
+\end{document}

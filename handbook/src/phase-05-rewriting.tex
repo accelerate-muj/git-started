@@ -1,0 +1,403 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{5}
+\phasetitle{Rewriting history}
+\phasesubtitle{Interactive rebase, and the difference between what happened and what you want to publish.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 5: Rewriting history},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Two different histories}
+
+The history of how you actually worked is a mess. You committed something called
+\co{wip}, then \co{wip 2}, then \co{fix typo}, then \co{actually fix typo}, then you
+realised the whole approach was wrong and started again.
+
+The history you want a reviewer to read is a short sequence of complete, sensible
+changes, each of which does one thing and has a message explaining why.
+
+Those two things are almost never the same, and git is one of very few version
+control systems that lets you turn the first into the second before anyone else
+sees it. That is what this phase is about.
+
+\begin{why}
+This is not vanity. A clean history is a working tool. \co{git bisect} can find the
+commit that broke your build, but only if each commit builds. \co{git revert} can
+undo a feature cleanly, but only if the feature is not smeared across nine commits
+mixed with unrelated work. \co{git blame} tells you why a line exists, but only if
+the commit it points at has a real message.
+
+Phase 6 is entirely about tools that only work well on a tidy history. This phase
+is how the history gets tidy.
+\end{why}
+
+\section{The golden rule}
+
+\begin{trap}
+\textbf{Do not rewrite history that other people have.}
+
+Rewriting produces new commits with new hashes. Anyone whose branch is built on the
+old commits now has work attached to objects that no longer exist upstream, and
+sorting that out is their problem, caused by you.
+
+In practice: rewrite freely on your own unpushed branch. Rewrite carefully on a
+pushed branch that only you are working on, which is what \co{--force-with-lease}
+is for. Never rewrite \co{main}, or any branch other people build on, unless the
+whole team has agreed and is standing by.
+\end{trap}
+
+Everything below is safe on a branch that is yours alone. That covers the large
+majority of real use.
+
+\section{Interactive rebase}
+
+The main tool.
+
+\begin{shell}
+git rebase -i HEAD~5
+\end{shell}
+
+This says: take the last five commits, and let me edit the plan for replaying them.
+Your editor opens with a to-do list:
+
+\begin{terminal}
+pick 3a1f2b9 Add poem parser
+pick 7c4d8e1 wip
+pick 2b9a0c3 wip 2
+pick 8e1f4a7 fix typo
+pick 5d3c2b8 Handle empty input
+
+# Rebase 9f2e1d0..5d3c2b8 onto 9f2e1d0 (5 commands)
+\end{terminal}
+
+Two things surprise everyone the first time:
+
+\begin{enumerate}
+  \item \textbf{The list is oldest first.} \co{git log} shows newest first. The
+    rebase to-do shows the order commits will be replayed in, which is the opposite.
+  \item \textbf{You edit the list, not the commits.} You are writing a script. When
+    you save and close, git runs it.
+\end{enumerate}
+
+Change the word at the start of a line to change what happens to that commit:
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{3.2cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{Effect} \\
+\midrule
+\co{pick} & Keep the commit as it is. The default. \\
+\co{reword} & Keep the changes, edit the message. \\
+\co{edit} & Stop here so you can change the commit's contents. \\
+\co{squash} & Merge into the previous commit, and combine both messages. \\
+\co{fixup} & Merge into the previous commit, and throw this message away. \\
+\co{drop} & Delete the commit entirely. Deleting the line does the same. \\
+\co{exec} & Run a shell command at this point. \\
+\co{break} & Stop here for no reason other than that you asked. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+You can also \textbf{reorder} commits by moving lines around, which git will do
+without complaint as long as the changes do not depend on each other.
+
+\subsection{Squashing a messy branch}
+
+The most common use by a wide margin. Turn five commits into one:
+
+\begin{terminal}
+pick   3a1f2b9 Add poem parser
+fixup  7c4d8e1 wip
+fixup  2b9a0c3 wip 2
+fixup  8e1f4a7 fix typo
+squash 5d3c2b8 Handle empty input
+\end{terminal}
+
+The three \co{wip} messages are discarded by \co{fixup}. The last one is
+\co{squash}, so git will open an editor letting you write a combined message. The
+result is one commit called something like ``Add poem parser, handling empty
+input''.
+
+\begin{note}
+\co{squash} and \co{fixup} both merge upward, into the line above. That is why the
+first line must stay \co{pick}: there is nothing above it to merge into.
+\end{note}
+
+\subsection{Rewording without touching content}
+
+\begin{terminal}
+pick   3a1f2b9 Add poem parser
+reword 7c4d8e1 asdfgh
+pick   2b9a0c3 Handle empty input
+\end{terminal}
+
+Git replays the first commit, stops at the second, opens your editor with the old
+message, and continues once you save.
+
+\subsection{Splitting one commit into two}
+
+You committed two unrelated changes together and want them separated. Mark it
+\co{edit}:
+
+\begin{terminal}
+pick 3a1f2b9 Add poem parser
+edit 7c4d8e1 Add parser and fix unrelated bug
+\end{terminal}
+
+Git stops with that commit checked out. Undo it, keeping the changes on disk:
+
+\begin{shell}
+git reset HEAD~1
+\end{shell}
+
+Now stage and commit the two halves separately:
+
+\begin{shell}
+git add parser.py
+git commit -m "Add poem parser"
+git add utils.py
+git commit -m "Fix off-by-one in line counter"
+git rebase --continue
+\end{shell}
+
+\begin{tryit}
+If the two changes are in the \emph{same file}, stage them separately with:
+
+\begin{shell}
+git add -p utils.py
+\end{shell}
+
+Git walks you through each chunk of the diff and asks whether to stage it.
+Press \co{y} to stage, \co{n} to skip, \co{s} to split the chunk into smaller ones,
+and \co{?} for the full list.
+
+\co{git add -p} is one of the highest value commands in git and almost nobody is
+taught it. It is what makes small, focused commits practical instead of aspirational.
+\end{tryit}
+
+\section{The autosquash workflow}
+
+Interactive rebase is powerful and it makes you stop and edit a to-do list. There is
+a faster path for the specific case of ``I need to fix a commit I made earlier on
+this branch''.
+
+Find the commit you need to amend, then:
+
+\begin{shell}
+git add the-fix.py
+git commit --fixup 3a1f2b9
+\end{shell}
+
+This makes an ordinary commit with the message \co{fixup! Add poem parser}. Keep
+working, make as many of these as you like. When you are ready to tidy up:
+
+\begin{shell}
+git rebase -i --autosquash HEAD~10
+\end{shell}
+
+Git has already rearranged the to-do list for you: each \co{fixup!} commit has been
+moved directly beneath the commit it refers to and marked \co{fixup}. Usually you
+save the file without changing anything.
+
+Make it the default so you never have to remember the flag:
+
+\begin{shell}
+git config --global rebase.autoSquash true
+\end{shell}
+
+\begin{why}
+This exists because the alternative is worse. Without it you either interrupt your
+work to do a full interactive rebase every time you notice a small mistake, or you
+push a branch with six commits called ``address review comments'', which tells a
+future reader nothing at all.
+\end{why}
+
+\section{Cherry-pick}
+
+Take one commit from anywhere and apply it here.
+
+\begin{shell}
+git cherry-pick 8e1f4a7
+\end{shell}
+
+Useful when a bug fix landed on a feature branch and needs to go to \co{main} now,
+without the rest of the feature.
+
+\begin{shell}
+git cherry-pick 8e1f4a7 2b9a0c3
+git cherry-pick main~5..main~2
+git cherry-pick -n 8e1f4a7
+\end{shell}
+
+\co{-n} applies the change without committing, so you can adjust it first.
+
+\begin{trap}
+Cherry-picking makes a \emph{copy}, with a different hash. If you cherry-pick from a
+branch and later merge that same branch, git may present the same change twice and
+conflict with itself.
+
+For one urgent fix, cherry-pick. For anything ongoing, merge properly instead.
+Repeated cherry-picking between long-lived branches produces duplicated history that
+becomes genuinely hard to reason about.
+\end{trap}
+
+\section{rebase -{}-onto}
+
+The surgical version, and the one worth knowing when you have made a branch from the
+wrong place.
+
+You branched \co{feature} off \co{experimental}, then realised it should have come
+off \co{main}. You want your three commits, without dragging \co{experimental}
+along.
+
+\begin{shell}
+git rebase --onto main experimental feature
+\end{shell}
+
+Read it as three parts: \textbf{onto} where they should land, \textbf{from} the old
+base to exclude, \textbf{which} branch to move.
+
+\begin{terminal}
+before                         after
+
+A---B---C  main                A---B---C  main
+     \                                  \
+      D---E  experimental                F'--G'--H'  feature
+           \
+            F---G---H  feature
+\end{terminal}
+
+Commits \co{D} and \co{E} are left behind. \co{F}, \co{G} and \co{H} are replayed
+on top of \co{main} as new commits.
+
+\section{Rewriting all of history}
+
+Sometimes the problem is not the last few commits. Somebody committed a password
+three months ago, or a 200 MB video file that has been slowing every clone since.
+
+Removing the file in a new commit is not enough. It is still in the history, still
+in every clone, and a secret in git history should be treated as public.
+
+The tool is \co{git-filter-repo}, which is separate from git and needs installing:
+
+\begin{shell}
+pip install git-filter-repo
+\end{shell}
+
+Remove a file from every commit that ever contained it:
+
+\begin{shell}
+git filter-repo --path secrets.env --invert-paths
+\end{shell}
+
+Or purge a string everywhere it appears:
+
+\begin{shell}
+git filter-repo --replace-text expressions.txt
+\end{shell}
+
+\begin{trap}
+This rewrites every commit hash in the repository. Every open pull request breaks,
+every clone becomes incompatible, and everyone must re-clone from scratch. It is a
+coordinated operation, not something to do on a Tuesday afternoon.
+
+And it does not un-leak the secret. Anyone who cloned before you rewrote still has
+it, and GitHub may have cached it. \textbf{Rotate the credential first, then clean
+the history.} In that order, always. The rewrite is housekeeping, the rotation is
+the actual fix.
+\end{trap}
+
+\begin{note}
+You will see \co{git filter-branch} in older documentation. It is slow, easy to get
+wrong, and git itself now prints a warning recommending you use
+\co{git-filter-repo} instead. The BFG Repo-Cleaner is another good option, faster
+than \co{filter-branch} and simpler for the common cases.
+\end{note}
+
+\section{When a rebase goes wrong}
+
+It will, and it is fine.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{5.8cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{What it does} \\
+\midrule
+\co{git rebase -{}-abort} & Stop, put everything back the way it was \\
+\co{git rebase -{}-skip} & Discard the commit being applied, carry on \\
+\co{git rebase -{}-continue} & Carry on after resolving a conflict \\
+\co{git rebase -{}-edit-todo} & Change the plan mid-rebase \\
+\co{git status} & Tells you where in the rebase you are \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\co{--abort} works at any point and always returns you to exactly where you started.
+There is no state a rebase can leave you in that you cannot back out of.
+
+If you have already finished a bad rebase:
+
+\begin{shell}
+git reset --hard ORIG_HEAD
+\end{shell}
+
+Or find the pre-rebase position in \co{git reflog} and reset to it. Phase 4 covers
+this in full.
+
+\begin{deeper}
+Since Git 2.26 the default rebase engine is the ``merge'' backend rather than the
+old patch based one. This is why rebase now handles renames, empty commits and
+directory moves far better than the reputation it earned a decade ago.
+
+It also means \co{git rebase} and \co{git merge} share conflict resolution
+machinery, so \co{rerere} works with both. Phase 7 covers \co{rerere}, which
+remembers how you resolved a conflict and replays that resolution automatically the
+next time it sees the same one. On a long-lived branch that you rebase repeatedly,
+it is transformative.
+\end{deeper}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.4cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+Edit the last commit & \co{git commit -{}-amend} \\
+Tidy the last N commits & \co{git rebase -i HEAD\textasciitilde N} \\
+Squash a branch into one commit & \co{rebase -i}, then \co{fixup} every line but the first \\
+Fix an earlier commit, later & \co{git commit -{}-fixup <sha>} then \co{rebase -i -{}-autosquash} \\
+Split a commit in two & \co{edit}, then \co{git reset HEAD\textasciitilde 1}, then commit twice \\
+Stage part of a file & \co{git add -p} \\
+Copy one commit here & \co{git cherry-pick <sha>} \\
+Move a branch to a new base & \co{git rebase -{}-onto <new> <old> <branch>} \\
+Remove a file from all history & \co{git filter-repo -{}-path <f> -{}-invert-paths} \\
+Undo a finished rebase & \co{git reset -{}-hard ORIG\_HEAD} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item Why is the interactive rebase to-do list in the opposite order to
+    \co{git log}?
+  \item What is the difference between \co{squash} and \co{fixup}?
+  \item Walk through splitting one commit into two.
+  \item What does \co{git commit -{}-fixup} buy you over doing a rebase immediately?
+  \item You leaked an API key in a commit from March. What are the two steps, and
+    which comes first?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 6, \emph{Forensics}, which is about reading history rather than
+writing it: finding the commit that broke the build automatically, searching every
+version of every file for a string that no longer exists, and working out who to ask.
+
+\end{document}

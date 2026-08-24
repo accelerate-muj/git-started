@@ -1,0 +1,513 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{15}
+\phasetitle{Being a maintainer}
+\phasesubtitle{The job is mostly not code. Governance, review, saying no, and not burning out.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 15: Being a maintainer},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{What the job actually is}
+
+In Phase 3 the team leader merged pull requests. Every time they merged one,
+everyone else's branch went stale and somebody had to rebase. That small annoyance
+is the whole job in miniature: a maintainer's decisions are mostly decisions about
+other people's time.
+
+The surprise, for anyone who takes on a project people actually use, is how little
+of the work is programming. The realistic split is closer to this:
+
+\begin{description}
+  \item[Deciding] What belongs in this project and what does not. The most valuable
+    and least visible thing you do.
+  \item[Reviewing] Reading other people's code carefully enough to be useful, and
+    quickly enough to be worth submitting to.
+  \item[Explaining] The same five questions, forever, to people who each ask once.
+  \item[Triaging] Sorting the incoming pile into real, duplicate, unclear, and not
+    our problem.
+  \item[Releasing] Versioning, notes, and not breaking people.
+  \item[Refusing] Politely, clearly, and often.
+  \item[Coding] Whatever is left.
+\end{description}
+
+Nobody warns you about this, and it is the main reason maintainers quit.
+
+\begin{why}
+This phase exists because Accelerate runs an organisation with repositories that
+outlive their authors' membership. The people who wrote \co{campus-mapper} will
+graduate. Somebody will inherit it. Everything here is the difference between
+inheriting a project and inheriting a mess.
+\end{why}
+
+\section{The files that answer questions for you}
+
+Every question you answer twice should be answered in a file instead. GitHub has
+specific names it recognises and surfaces automatically.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{4.2cm} X@{}}
+\toprule
+\rhtablehead{File} & \rhtablehead{Answers} \\
+\midrule
+\co{README.md} & What is this, why would I use it, how do I start \\
+\co{CONTRIBUTING.md} & How do I submit a change and what will you reject \\
+\co{CODE\_OF\_CONDUCT.md} & How people are expected to behave, and enforcement \\
+\co{SECURITY.md} & How to report a vulnerability privately \\
+\co{SUPPORT.md} & Where to ask questions that are not bugs \\
+\co{LICENSE} & What others may legally do \\
+\co{CODEOWNERS} & Who must review which files \\
+\co{FUNDING.yml} & Adds a Sponsor button \\
+\co{CITATION.cff} & How to cite this in a paper \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+Put them in the repository root or in \co{.github/}. An organisation-level
+\co{.github} repository provides defaults for every repository that lacks its own,
+which is exactly why Accelerate has one.
+
+\begin{note}
+The highest leverage sentence in \co{CONTRIBUTING.md} is the one describing what you
+will \emph{not} accept. Scope creep arrives as a well-written, working pull request
+from someone who spent their weekend on it, and rejecting that is miserable for
+everyone. A sentence up front prevents the whole situation.
+\end{note}
+
+\section{Licensing}
+
+\begin{trap}
+A public repository with no LICENSE file is \textbf{not} open source. Under
+copyright law, code with no licence is all rights reserved. Nobody may legally use,
+modify, or distribute it.
+
+GitHub's terms let others view and fork within GitHub, and that is all. Every serious
+company's legal team blocks dependencies with no licence. If you want people to use
+your work, add a licence on day one.
+\end{trap}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.5cm} X@{}}
+\toprule
+\rhtablehead{Licence} & \rhtablehead{In short} \\
+\midrule
+MIT & Do what you like, keep the notice, no warranty. Short and universally
+understood. The default for student and club projects. \\
+Apache 2.0 & Like MIT, plus an explicit patent grant and a requirement to state
+changes. Preferred by companies for that patent clause. \\
+BSD 3-Clause & Like MIT, plus you may not use the authors' names to endorse. \\
+GPL v3 & Anyone distributing a derivative must release their source under GPL too.
+Copyleft. \\
+AGPL v3 & GPL, and running it as a network service counts as distribution. Closes
+the cloud loophole. \\
+MPL 2.0 & Copyleft per file. Modified files stay open, the larger work need not be. \\
+CC BY-SA & For documentation and creative work, not code. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{shell}
+gh repo create project --public --license mit
+gh api repos/:owner/:repo --jq '.license.spdx_id'
+\end{shell}
+
+\subsection{Contributions and provenance}
+
+When someone contributes, who owns it? By default they retain copyright and licence
+it to you under the project's licence. Two mechanisms formalise it:
+
+\textbf{DCO}, the Developer Certificate of Origin, is a statement that you wrote the
+code and may submit it, asserted by signing off commits:
+
+\begin{shell}
+git commit -s -m "Add parser"
+\end{shell}
+
+That appends \co{Signed-off-by: Name <email>}. Lightweight, and enough for most
+projects, including the Linux kernel.
+
+\textbf{CLA}, a Contributor Licence Agreement, is a real contract, usually assigning
+broader rights to a company. Heavier, and a genuine barrier: a first-time contributor
+fixing a typo will not sign a legal document, and you lose that contribution.
+
+For a student club, DCO or nothing. A CLA is a corporate tool for corporate reasons.
+
+\section{Protecting the branch}
+
+\begin{shell}
+gh api -X PUT repos/:owner/:repo/branches/main/protection \
+  -F required_pull_request_reviews[required_approving_review_count]=1 \
+  -F required_pull_request_reviews[dismiss_stale_reviews]=true \
+  -F required_status_checks[strict]=true \
+  -F required_status_checks[contexts][]=test \
+  -F enforce_admins=false \
+  -F restrictions=null
+\end{shell}
+
+The options worth understanding:
+
+\begin{description}
+  \item[Required reviews] How many approvals before merging. One is usually right.
+    Two on a project where a mistake is expensive.
+  \item[Dismiss stale reviews] New commits invalidate old approvals. Turn this on.
+    Without it, someone can get approval and then push something else.
+  \item[Require branches up to date] The \co{strict} flag. Prevents a green pull
+    request merging into a \co{main} that has moved. Correct, and it causes the
+    constant rebasing that merge queues solve.
+  \item[Required status checks] Which CI jobs must pass.
+  \item[Enforce admins] Whether the rules apply to you. Leaving this off is a
+    pragmatic escape hatch and a slow corrosion of the rules. Turn it on once the
+    project is stable.
+  \item[Require signed commits] Phase 10.
+  \item[Require linear history] Blocks merge commits, forcing squash or rebase.
+  \item[Require conversation resolution] All review comments resolved before merge.
+\end{description}
+
+\begin{note}
+\textbf{Rulesets} are the newer system and are better. They can apply to several
+repositories at once, target branches by pattern, be evaluated in a dry-run mode
+before enforcement, and layer rather than override. If you are setting this up fresh
+in an organisation, use rulesets rather than per-repository branch protection.
+\end{note}
+
+\subsection{CODEOWNERS}
+
+\begin{terminal}
+*                       @accelerate-muj/core-committee
+/handbook/              @TheQMLGuy
+/.github/workflows/     @TheQMLGuy @shashwat-deep
+*.tex                   @TheQMLGuy
+/phase-2/poems/
+\end{terminal}
+
+Last matching rule wins, unlike \co{.gitignore}. The empty last line means poem
+submissions need no specific owner, which is what you want during a workshop with
+thirty simultaneous pull requests.
+
+Combined with ``require review from code owners'' in branch protection, the right
+person is requested automatically and nothing merges without them.
+
+\section{Reviewing well}
+
+Code review is a skill and most people are never taught it. Reviewing badly is worse
+than not reviewing.
+
+\subsection{What to actually look for, in order}
+
+\begin{enumerate}
+  \item \textbf{Is this the right change at all?} Wrong-problem is the most expensive
+    thing to catch late and the cheapest to catch here. Ask before reading closely.
+  \item \textbf{Does it work?} Check it out and run it. \co{gh pr checkout 42}.
+  \item \textbf{What happens at the edges?} Empty input, no network, concurrent runs,
+    huge input.
+  \item \textbf{Can the next person understand it?} Including the author in a year.
+  \item \textbf{Is it tested?} Enough that a future change breaking it is caught.
+  \item \textbf{Style.} Last, and ideally not by you. A formatter should own this.
+\end{enumerate}
+
+\subsection{How to say it}
+
+\begin{trap}
+The two failure modes are the rubber stamp and the pile-on. Both are common and both
+drive contributors away.
+
+Things that help, concretely:
+
+\begin{itemize}
+  \item \textbf{Say what is good.} Not flattery. Reviews that are exclusively
+    negative read as hostile even when every point is correct.
+  \item \textbf{Separate must from nice.} Prefix optional remarks with
+    \co{nit:} or \co{optional:}. Without that signal every comment reads as blocking
+    and a two-line change takes a week.
+  \item \textbf{Ask rather than assert.} ``What happens if this is empty?'' beats
+    ``this crashes on empty input'', because sometimes it does not and you were
+    wrong.
+  \item \textbf{Explain the why.} ``Use a set here'' teaches nothing. ``A set makes
+    this lookup constant time, and this runs per request'' teaches once and forever.
+  \item \textbf{Use suggested changes} for anything trivial. A one-click fix is
+    kinder than a paragraph.
+  \item \textbf{Review promptly or say you cannot.} A pull request sitting untouched
+    for two weeks is the single most common reason people stop contributing. ``I
+    cannot look at this until Friday'' costs you ten seconds and keeps them.
+\end{itemize}
+\end{trap}
+
+\begin{shell}
+gh pr diff 42
+gh pr checkout 42
+gh pr review 42 --comment --body "Two questions inline, nothing blocking"
+gh pr review 42 --approve --body "Nice catch on the empty case"
+gh pr review 42 --request-changes --body "See the note about the token"
+\end{shell}
+
+\subsection{Receiving review}
+
+The other half, and it is a skill too. The reviewer is not attacking you. If a
+reviewer misread your code, that is evidence the code is easy to misread, and the
+useful response is usually a clearer name or a comment rather than an explanation in
+the thread that nobody will ever read again.
+
+Push back when you disagree. A review is a conversation, not a verdict. Just do it
+about the technical point.
+
+\section{Triage}
+
+Incoming issues are not a to-do list. They are unsorted input, and about half are
+not work.
+
+A workable label scheme, kept small:
+
+\begin{terminal}
+type:    bug  feature  docs  question
+status:  needs-info  confirmed  blocked  wontfix  duplicate
+effort:  good-first-issue  help-wanted
+\end{terminal}
+
+\begin{shell}
+gh issue list --label "status:needs-info" --json number,updatedAt
+gh issue edit 42 --add-label "status:confirmed" --milestone "v1.1"
+gh issue close 17 --reason "not planned" --comment "Duplicate of #12"
+\end{shell}
+
+\subsection{The triage question}
+
+For every new issue, in order: \emph{Can I reproduce it? Is it already reported? Is
+it in scope? Is it actionable as written?}
+
+Anything failing the last test gets one request for specifics and a
+\co{status:needs-info} label. If it goes quiet for a few weeks, close it kindly.
+Closing is not rejection, and reopening is free.
+
+\begin{trap}
+Stale bots that close inactive issues automatically are widely used and widely
+resented. From the maintainer's side it keeps the list honest. From the reporter's
+side, being told by a robot that a real, unfixed bug is now closed for inactivity is
+insulting, and it is a recurring source of public complaints about major projects.
+
+If you use one, exclude confirmed bugs, give a long window, and write the message
+like a person. Better: do not close on inactivity at all, and use a label plus a
+saved search instead. An issue nobody has fixed is still true.
+\end{trap}
+
+\section{Saying no}
+
+The hardest part of the job, and the one that decides whether your project stays
+maintainable.
+
+Every accepted feature is permanent. You will maintain it, document it, keep it
+working through refactors, and break someone if you remove it. A feature used by four
+percent of users costs you forever.
+
+\subsection{Wording that works}
+
+For an out-of-scope request:
+
+\begin{quote}
+\emph{Thanks for writing this up. I do not think this belongs in the core project,
+because it only applies when you are using X and it would add a dependency for
+everyone else. It would make a good extension, though, and I would happily link it
+from the README.}
+\end{quote}
+
+For a pull request nobody asked for:
+
+\begin{quote}
+\emph{I appreciate the work here and I am not going to merge it, so let me explain
+why rather than leaving it open. This changes the default behaviour, and there are
+people relying on the current default. If you want to pursue it, open an issue and
+we can talk about a migration path.}
+\end{quote}
+
+The pattern in both: decide, say so plainly, give the actual reason, offer a path
+forward if there is one. Do not soften it into ambiguity.
+
+\begin{trap}
+The worst thing you can do is leave it open. An unanswered pull request is a person
+waiting, checking, and slowly concluding they were ignored. A clear no on the day it
+arrives is far kinder than silence for six months, and people generally respect it.
+
+If you are not sure, say that: ``I need to think about this, give me a week.'' Then
+actually do.
+\end{trap}
+
+\section{Releases and not breaking people}
+
+Phase 10 covered the mechanics. The judgement is here.
+
+\textbf{Compatibility is a promise.} Once someone depends on your project, changing
+behaviour breaks their build at a time you chose and they did not. Semantic versioning
+is how you communicate that in advance.
+
+\textbf{Deprecate before removing.} The sequence that works:
+
+\begin{enumerate}
+  \item Release a version where the old way still works but warns, and the new way
+    exists.
+  \item Document the migration, with a before and after example.
+  \item Leave it for at least one minor release, longer if the project is widely used.
+  \item Remove it in the next MAJOR, and say so prominently in the notes.
+\end{enumerate}
+
+\textbf{Write release notes for humans.} A list of commit messages is not release
+notes. Lead with what changed for the user, then what to do about it, and put the
+full log at the bottom for anyone who wants it.
+
+\section{Security}
+
+\co{SECURITY.md} states which versions you support and how to report privately.
+
+\begin{trap}
+Never ask people to report vulnerabilities as public issues. The whole point is a
+window to fix it before it is exploited.
+
+GitHub has \textbf{private vulnerability reporting}, free, which gives you a private
+thread and a place to draft an advisory and request a CVE:
+
+\begin{shell}
+gh api -X PUT repos/:owner/:repo/private-vulnerability-reporting
+\end{shell}
+
+Turn it on for anything anyone else runs.
+\end{trap}
+
+The process when a report arrives: acknowledge within a day or two even if only to
+say you have seen it; agree a disclosure date with the reporter, ninety days being the
+industry norm; fix privately using a draft security advisory, which gives you a
+private fork; release the fix and publish the advisory at the same moment; credit the
+reporter, because it costs nothing and it is the entire compensation most researchers
+get.
+
+\subsection{Dependencies}
+
+\begin{terminal}
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule: {interval: "weekly"}
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        patterns: ["pytest*", "ruff"]
+\end{terminal}
+
+Group updates, or Dependabot will file eleven pull requests a week and you will start
+ignoring them, which is worse than not having it.
+
+\section{Growing contributors}
+
+A project with one maintainer has a bus factor of one. Growing that is a deliberate
+activity.
+
+\begin{description}
+  \item[Label real starter issues] \co{good first issue} on something genuinely
+    small, with the file named and the approach sketched. A vague hard task with a
+    friendly label is worse than nothing.
+  \item[Answer the first pull request properly] Someone's first contribution is
+    disproportionately important. Review it that week. Be generous about small
+    things.
+  \item[Promote people] Someone who has landed several good changes and reviews
+    others should be given commit access before they ask. Most people will never ask.
+  \item[Write down the tacit knowledge] The reason for the odd workaround, the thing
+    that always breaks in CI. \co{CONTRIBUTING.md}, or an \co{ARCHITECTURE.md}.
+  \item[Let go of things] The instinct to fix it yourself because it is faster is
+    correct in the short run and fatal in the long run.
+\end{description}
+
+\section{Governance}
+
+Small projects run on ``whoever started it decides''. That works until it does not.
+
+\begin{description}
+  \item[BDFL] One person has final say. Efficient, clear, and a single point of
+    failure in every sense.
+  \item[Meritocracy or committer model] Contributors earn commit access over time,
+    decisions by rough consensus. Most mid-sized projects.
+  \item[Elected steering committee] Formal, elections, defined terms. Overhead worth
+    paying once enough people depend on it. Accelerate's constitution is this.
+  \item[Foundation] Neutral legal owner, for projects where several companies need
+    assurance nobody can capture it.
+\end{description}
+
+Whatever you use, write it down. Unwritten governance is the founder's preferences,
+and it is invisible until the first real disagreement, at which point everyone
+discovers they believed something different.
+
+\section{Burnout}
+
+The predictable ending. Open source maintainer burnout is common enough to be
+studied, and the pattern is consistent: growing obligation, static reward, no
+boundary between the project and the rest of life.
+
+What actually helps:
+
+\begin{description}
+  \item[Set office hours] Fixed times you look at the project. Outside them, do not.
+    The alternative is a background hum of obligation that never stops.
+  \item[Say the project is finished] Software can be done. ``Complete, accepting bug
+    fixes only'' in the README is a legitimate and underused state.
+  \item[Reduce the surface] Fewer features, fewer platforms, fewer promises. Every
+    reduction is permanent relief.
+  \item[Recruit before you need to] Phase 15's whole previous section.
+  \item[Turn off notifications] Genuinely. Phase 12.
+  \item[Remember what you owe] You published something for free. You do not owe
+    anyone support, a fix, a response, or your weekend. Entitled demands are the
+    other person being wrong.
+\end{description}
+
+\begin{trap}
+The specific thing to watch for is a project that has become an obligation you
+resent and cannot put down. The exits are all fine: hand it over, add maintainers,
+mark it unmaintained, or archive it.
+
+Archiving is honest and much better than abandoning it silently while people keep
+filing issues.
+
+\begin{shell}
+gh repo archive old-project
+\end{shell}
+
+Say why in the README, and point at a fork if a good one exists.
+\end{trap}
+
+\section{Endings}
+
+\textbf{Handing over.} Add them as an admin, let them merge things for a while, then
+transfer. \co{Settings, Transfer ownership} moves it with issues, pull requests and
+stars intact, and leaves a redirect. Never delete and re-upload, which destroys all
+of that.
+
+\textbf{Being forked.} Anyone may fork your project. If someone forks because they
+disagree with your direction, that is the licence working as intended, and it is not
+a betrayal. If the fork is better maintained than yours, the honest move is to link
+it.
+
+\textbf{Succession for a club.} Accelerate's specific case. Every repository should
+name a current owner, and that name should be updated when officers change. A repo
+whose owner graduated two years ago is unmaintained regardless of what the settings
+say.
+
+\checkyourself{
+\begin{enumerate}
+  \item What can people legally do with a public repository that has no LICENSE?
+  \item Why turn on ``dismiss stale reviews''?
+  \item Name three things that make a code review useful rather than discouraging.
+  \item Why is leaving a pull request open worse than rejecting it?
+  \item What are the four steps to remove a feature without breaking people?
+  \item Someone reports a vulnerability in a public issue. What now?
+  \item Your project has one maintainer and it is you. What is the actual risk, and
+    what reduces it?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 16, the last one, on the parts of git that only show up at
+scale, and on where git came from, which explains several things that look strange
+until you know.
+
+\end{document}

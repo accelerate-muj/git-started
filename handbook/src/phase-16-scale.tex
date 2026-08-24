@@ -1,0 +1,311 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{16}
+\phasetitle{Scale, origins, and the long tail}
+\phasesubtitle{Where git came from, why that explains the strange parts, and what is left.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 16: Scale, origins, and the long tail},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Ten days in April}
+
+In 2005 the Linux kernel used a proprietary version control system called BitKeeper,
+provided free to the project under a licence that forbade reverse engineering. That
+arrangement collapsed when the relationship between the vendor and some kernel
+developers broke down, and the kernel, with over two million lines and thousands of
+contributors, suddenly had no version control.
+
+Linus Torvalds wrote the first version of git in about ten days. It was
+self-hosting after a few, and the kernel was using it within weeks.
+
+The requirements he was solving for were specific and unusual:
+
+\begin{description}
+  \item[Distributed] Thousands of developers, no central server, most of them
+    offline much of the time and unknown to each other.
+  \item[Fast] Merges and diffs on a two million line tree had to take seconds.
+  \item[Verifiable] Patches arrive from strangers by email. It must be impossible to
+    alter history undetectably.
+  \item[Branch cheaply] Kernel development is many parallel experimental lines.
+\end{description}
+
+\begin{why}
+Almost every part of git that feels strange is a direct answer to one of those.
+
+Content addressed storage, from Phase 9, is the verifiability requirement. Snapshots
+rather than diffs are the speed requirement. Branches as forty-one byte files are the
+cheap branching requirement. The staging area exists so you can assemble a clean
+patch from messy work before mailing it.
+
+And authorship being an unverified string, from Phase 10, is the distributed
+requirement: there is no central authority to check against, so identity is asserted
+by the author and proven, if at all, by signing.
+
+Git is not a general purpose tool that happens to suit the kernel. It is a kernel
+tool that turned out to suit everyone.
+\end{why}
+
+\section{The email workflow}
+
+GitHub did not exist until 2008. For three years git was used the way the kernel
+still uses it today: patches by email to a mailing list. It is worth seeing, because
+these commands are still there and still used by some of the most important projects
+in the world.
+
+\begin{shell}
+git format-patch main..feature
+git format-patch -3 --cover-letter -o outgoing/
+\end{shell}
+
+This writes one file per commit, named \co{0001-Add-parser.patch}, containing the
+diff, the message, the author, and the date.
+
+\begin{shell}
+git send-email --to=maintainer@example.com outgoing/*.patch
+\end{shell}
+
+On the other end, the maintainer applies them:
+
+\begin{shell}
+git am < 0001-Add-parser.patch
+git am --abort
+git am --continue
+\end{shell}
+
+\co{git am} preserves the original author, date and message, so the contributor gets
+proper credit in the history even though the maintainer ran the command. That is the
+whole point, and it is why \co{git apply}, which only applies the diff, is the
+lesser tool.
+
+\begin{note}
+This explains several conventions that look arbitrary otherwise.
+
+\textbf{Why commit messages have a short subject line and a blank line then a body:}
+because they became the subject and body of an email.
+
+\textbf{Why \co{Signed-off-by} exists} and why the kernel requires it: it was a
+statement of provenance attached to a patch arriving from a stranger, which is Phase
+15's DCO.
+
+\textbf{Why a pull request is called a pull request:} the original form was an email
+asking a maintainer to \co{git pull} from your public repository. \co{git
+request-pull} still generates that message.
+\end{note}
+
+\begin{shell}
+git request-pull v1.0.0 https://github.com/me/project feature
+\end{shell}
+
+\section{Making a large repository fast}
+
+Git's performance assumptions break somewhere around the point where the working tree
+has hundreds of thousands of files. Phase 9 explained why: \co{git status} compares
+filesystem metadata for every tracked path.
+
+\begin{shell}
+git config core.fsmonitor true
+git config core.untrackedCache true
+git config feature.manyFiles true
+git commit-graph write --reachable
+git maintenance start
+\end{shell}
+
+\begin{description}
+  \item[fsmonitor] A background process watches the filesystem and tells git which
+    files changed, so \co{git status} stops walking the tree. The single biggest win
+    on a large repository.
+  \item[untrackedCache] Caches which directories contain untracked files.
+  \item[commit-graph] A precomputed index of the commit history, which speeds up
+    \co{git log}, merge base calculation, and anything that walks history.
+  \item[maintenance] Schedules the above to stay current, plus background prefetching
+    so your fetches are already mostly done.
+\end{description}
+
+\subsection{Scalar}
+
+Git ships with a tool that turns all of this on together, plus partial clone and
+sparse checkout from Phase 8:
+
+\begin{shell}
+scalar clone https://github.com/big/monorepo.git
+scalar register
+\end{shell}
+
+It came out of Microsoft's work getting the Windows source, which is enormous, into
+git. If you are on a repository big enough to hurt, start here rather than tuning
+settings individually.
+
+\subsection{Monorepos}
+
+One repository holding many projects. Google, Meta and Microsoft famously use them.
+
+The appeal: one commit can change a library and every caller atomically, there is one
+version of everything, and refactoring across project boundaries is possible at all.
+
+The cost: the repository gets huge, CI has to work out what actually needs rebuilding,
+and standard git tooling strains. Sparse checkout and partial clone are what make it
+survivable, along with a build system that understands the dependency graph.
+
+\begin{note}
+Almost no student project needs a monorepo, and quite a few adopt one because large
+companies do. The relevant question is whether your projects genuinely need to change
+together. If they do not, separate repositories are simpler in every way.
+\end{note}
+
+\section{The long tail}
+
+Real features, less commonly used, each solving one specific problem.
+
+\subsection{Bundles}
+
+A whole repository, or part of one, in a single file.
+
+\begin{shell}
+git bundle create repo.bundle --all
+git bundle create recent.bundle main~10..main
+git clone repo.bundle my-project
+git bundle verify repo.bundle
+\end{shell}
+
+For getting a repository across an air gap, onto a machine with no network, or onto a
+USB stick. It is a complete, verifiable transfer with no server involved, which is
+the distributed design showing through.
+
+\subsection{Notes}
+
+Attach information to a commit without changing it.
+
+\begin{shell}
+git notes add -m "Reviewed by the security team" <sha>
+git notes show <sha>
+git log --show-notes
+git push origin refs/notes/commits
+\end{shell}
+
+Because notes live in a separate ref, adding one does not alter the commit or its
+hash. Used for review metadata, test results, and build provenance. They must be
+pushed explicitly, which is why most people have never seen one.
+
+\subsection{Archive}
+
+\begin{shell}
+git archive --format=zip --output=release.zip v1.0.0
+git archive --format=tar.gz --prefix=project/ HEAD > project.tar.gz
+\end{shell}
+
+Exports a tree without \co{.git}. Respects \co{export-ignore} from
+\co{.gitattributes}, so you can keep tests and CI config out of a source tarball.
+
+\subsection{Orphan branches}
+
+A branch with no history at all:
+
+\begin{shell}
+git switch --orphan gh-pages
+git rm -rf .
+\end{shell}
+
+The classic use is a documentation branch that shares no ancestry with the code. This
+is what \co{gh-pages} originally was.
+
+\subsection{Unrelated histories}
+
+\begin{shell}
+git merge --allow-unrelated-histories other/main
+\end{shell}
+
+Git refuses to merge two histories with no common ancestor, because it is almost
+always a mistake. When you are genuinely combining two separate projects, this is
+the override.
+
+\subsection{Empty commits}
+
+\begin{shell}
+git commit --allow-empty -m "Trigger a rebuild"
+\end{shell}
+
+Useful for kicking CI. \co{gh run rerun} is usually better, but this works when
+nothing else will.
+
+\subsection{Replace}
+
+\begin{shell}
+git replace <old-sha> <new-sha>
+\end{shell}
+
+Makes git substitute one object for another when reading history, without rewriting
+anything. Used to graft a converted historical archive onto the front of a repository
+without changing any modern hashes.
+
+\subsection{Migrating from elsewhere}
+
+\begin{shell}
+git svn clone https://svn.example.com/repo --stdlayout
+\end{shell}
+
+Preserves history from Subversion. Mercurial has \co{hg-fast-export}. Both are one
+time operations, so accept a slow, careful run over a fast, wrong one.
+
+\section{What to read next}
+
+\begin{description}
+  \item[The Pro Git book] Free, online, and genuinely the reference. Chapter 10 is the
+    plumbing material from Phase 9 in more depth.
+  \item[git help <command>] Every command has a manual page, and unlike most software
+    they are good. \co{git help revisions} and \co{git help everyday} are worth an
+    hour on their own.
+  \item[The git source] Written in C, still readable, and the original design
+    documents are in \co{Documentation/technical/}.
+  \item[Your own repositories] The one that matters. Nothing here is learned by
+    reading it.
+\end{description}
+
+\section{The end of the rabbit hole}
+
+Thirteen phases beyond the workshop, and the useful summary is short.
+
+Git stores snapshots, addressed by the hash of their contents, linked into a graph by
+parent pointers. Branches are labels on that graph. Everything else, every command in
+this handbook, is a way of adding to the graph, moving a label, or reading what is
+already there.
+
+Once that sentence is genuinely obvious rather than memorised, you no longer need
+this document, which is the point of it.
+
+\checkyourself{
+\begin{enumerate}
+  \item Name three design decisions in git that come directly from the kernel's
+    requirements in 2005.
+  \item Why does a commit message have a subject line, a blank line, then a body?
+  \item What does \co{git am} preserve that \co{git apply} does not?
+  \item Why is a pull request called a \emph{pull} request?
+  \item Which setting gives the biggest \co{git status} speedup on a large
+    repository, and why does it work?
+  \item Explain git to somebody in three sentences, without using the word
+    \emph{version}.
+\end{enumerate}}
+
+\vspace{1.5em}
+{\color{rhaccent}\rule{\linewidth}{2.5pt}}
+\vspace{0.5em}
+
+{\sffamily\small\color{rhslate}\textbf{That is all of it.}}
+
+You started by making a folder and running \co{git init}. You have now been through
+undo, rewriting history, forensics, merge strategies, remotes, the object database,
+signing, configuration, GitHub, the CLI, CI, maintainership, and the reason any of it
+is shaped the way it is.
+
+Go and break something. You know how to get it back.
+
+\vspace{1em}
+{\sffamily\scriptsize\color{rhmuted}
+Corrections and additions: github.com/accelerate-muj/git-started\\
+Accelerate, Manipal University Jaipur. MIT licensed.}
+
+\end{document}

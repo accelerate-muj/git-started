@@ -1,0 +1,340 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{10}
+\phasetitle{Trust}
+\phasesubtitle{Anyone can commit as you. Signing, releases, and the day a password lands in history.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 10: Trust},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Commit authorship is a claim, not a fact}
+
+In Phase 1 of the workshop you ran this:
+
+\begin{shell}
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+\end{shell}
+
+Nothing verified either value. Git wrote what you typed into every commit.
+
+\begin{tryit}
+In a scratch repository:
+
+\begin{shell}
+git config user.name "Linus Torvalds"
+git config user.email "torvalds@linux-foundation.org"
+echo "hello" > f.txt && git add . && git commit -m "Fix the kernel"
+git log
+\end{shell}
+
+Git reports a commit by Linus Torvalds. Push it to a public repository and GitHub
+will display his name, and if that address is on his account, possibly his avatar.
+
+Nothing about this is a bug or an exploit. The author field is a string that git
+copies from your config.
+\end{tryit}
+
+\begin{why}
+This is not carelessness in git's design. Git was built for a mailing list workflow
+where patches arrive by email from strangers and maintainers judge them on content.
+Identity was never meant to be enforced by the transport.
+
+The consequence is that if you want authorship to mean something, you have to sign.
+\end{why}
+
+\section{Signing with SSH}
+
+Two mechanisms exist, GPG and SSH. GPG came first and is more widely supported.
+\textbf{SSH signing is much easier to set up}, works on GitHub, and reuses the key
+you already have. Start here.
+
+\begin{shell}
+ssh-keygen -t ed25519 -C "you@example.com"
+\end{shell}
+
+Skip that if you already have \co{\textasciitilde/.ssh/id\_ed25519.pub}. Then:
+
+\begin{shell}
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+git config --global tag.gpgsign true
+\end{shell}
+
+Register the key with GitHub as a \textbf{signing} key, which is a separate thing
+from an authentication key even if it is the same key:
+
+\begin{shell}
+gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "Signing key"
+\end{shell}
+
+Now every commit is signed automatically. Check:
+
+\begin{shell}
+git log --show-signature -1
+git verify-commit HEAD
+\end{shell}
+
+\subsection{Verifying other people locally}
+
+For git to verify someone else's signature it needs to know which keys belong to
+whom, in an allowed signers file:
+
+\begin{shell}
+echo "friend@example.com ssh-ed25519 AAAAC3Nza..." >> ~/.ssh/allowed_signers
+git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+\end{shell}
+
+Without it, git can confirm a signature is internally valid but cannot tell you
+whose it is.
+
+\section{Signing with GPG}
+
+If your project already uses GPG, or you want signatures verifiable outside GitHub:
+
+\begin{shell}
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format=long
+\end{shell}
+
+Take the key ID from the \co{sec} line and:
+
+\begin{shell}
+git config --global user.signingkey 3AA5C34371567BD2
+git config --global commit.gpgsign true
+gpg --armor --export 3AA5C34371567BD2
+gh gpg-key add -
+\end{shell}
+
+\begin{trap}
+On Windows and macOS the recurring problem is git being unable to find the agent, or
+the passphrase prompt failing in a non-interactive terminal. The error is usually
+\co{gpg failed to sign the data}.
+
+\begin{shell}
+export GPG_TTY=$(tty)
+git config --global gpg.program "C:/Program Files (x86)/GnuPG/bin/gpg.exe"
+\end{shell}
+
+Put the \co{GPG\_TTY} line in your shell profile. This single problem is why SSH
+signing is worth preferring.
+\end{trap}
+
+\section{What Verified actually proves}
+
+GitHub shows a green \textbf{Verified} badge on signed commits. Be precise about
+what it means: the commit was signed by a key registered to the account whose email
+is in the commit. It says nothing about the code being good, reviewed, or safe.
+
+\begin{note}
+There is one twist worth knowing. Commits made through the GitHub web interface,
+including merging a pull request with the button, are signed by \emph{GitHub's} key
+and show as verified. So a Verified badge sometimes means ``GitHub made this
+commit'' rather than ``this human signed it''. Both are legitimate. They are not the
+same claim.
+\end{note}
+
+To require signatures on a branch, use branch protection or a ruleset, covered in
+Phase 15.
+
+\section{Tags}
+
+A tag names a commit permanently. Branches move, tags do not.
+
+\subsection{Two kinds, and only one is right}
+
+\begin{shell}
+git tag v1.0.0
+\end{shell}
+
+A \textbf{lightweight} tag: a file in \co{refs/tags} containing a hash, exactly like
+a branch that never moves.
+
+\begin{shell}
+git tag -a v1.0.0 -m "First release"
+\end{shell}
+
+An \textbf{annotated} tag: a real object in the database with a tagger, date,
+message, and optionally a signature.
+
+\begin{trap}
+Use annotated tags for anything anyone else will see. Lightweight tags carry no
+author, no date, and no message, and they cannot be signed. \co{git describe}
+ignores them by default, which surprises people whose build version suddenly stops
+working.
+
+Lightweight tags are fine as a private bookmark. Releases should always be
+annotated, and ideally signed with \co{-s}.
+\end{trap}
+
+\begin{shell}
+git tag
+git tag -l "v1.*"
+git show v1.0.0
+git push origin v1.0.0
+git push --tags
+git tag -d v1.0.0
+git push origin --delete v1.0.0
+git describe --tags
+\end{shell}
+
+\begin{note}
+Tags are not pushed by \co{git push}. This catches everyone at least once: you tag a
+release, push, and the tag is not there. Push it explicitly.
+\end{note}
+
+\section{Versioning and releases}
+
+\subsection{Semantic versioning}
+
+\co{MAJOR.MINOR.PATCH}, and the rules are simple:
+
+\begin{description}
+  \item[MAJOR] You broke compatibility. Existing users must change something.
+  \item[MINOR] You added something, and everything that worked before still works.
+  \item[PATCH] You fixed a bug, changed no interface.
+\end{description}
+
+The version number is a promise to the people depending on you. Bumping MAJOR is not
+an admission of failure, it is how you tell people to read the notes before
+upgrading. Sneaking a breaking change into a PATCH is the actual failure.
+
+\subsection{Releases}
+
+A GitHub release attaches notes and downloadable files to a tag.
+
+\begin{shell}
+gh release create v1.0.0 --title "v1.0.0" --notes "First release"
+gh release create v1.0.0 --generate-notes
+gh release create v1.0.0 ./dist/app.zip ./dist/app.tar.gz
+gh release list
+gh release view v1.0.0
+gh release download v1.0.0
+\end{shell}
+
+\co{--generate-notes} writes the notes from merged pull request titles since the last
+tag. With reasonable PR titles the output is genuinely usable, which is a good
+argument for insisting on reasonable PR titles.
+
+\subsection{Changelogs}
+
+\co{CHANGELOG.md} exists for humans, in a way that generated release notes are not.
+The convention worth following groups changes under \textbf{Added}, \textbf{Changed},
+\textbf{Deprecated}, \textbf{Removed}, \textbf{Fixed} and \textbf{Security}, newest
+version at the top.
+
+\begin{note}
+Changelogs are the classic merge conflict, because every pull request appends to the
+same place, which is exactly the mechanism Phase 3 used deliberately. If it becomes
+painful, the usual fix is a directory of small files, one per change, combined at
+release time.
+\end{note}
+
+\section{The day someone commits a secret}
+
+It will happen. An \co{.env} file, an API key pasted into a config, a private key
+added by accident.
+
+\begin{trap}
+\textbf{Rotate the credential first. Always, before anything else.}
+
+The instinct is to scrub the history immediately, and that instinct is wrong,
+because it wastes the minutes that matter on the wrong task. Assume the secret is
+already compromised the moment it is pushed. Public repositories are scraped
+continuously by bots that exist specifically to find committed keys, and the delay
+between push and exploitation is routinely measured in minutes.
+
+Revoke and reissue the key. Then clean the history, which is housekeeping.
+\end{trap}
+
+The order:
+
+\begin{enumerate}
+  \item \textbf{Revoke the credential.} Rotate the key, change the password, expire
+    the token.
+  \item \textbf{Check for use.} Look at the provider's access logs.
+  \item \textbf{Remove it from history} with \co{git filter-repo}, per Phase 5.
+  \item \textbf{Force push, and tell everyone} to re-clone.
+  \item \textbf{Ask GitHub to purge caches}, because commits stay reachable by hash
+    through the API even after a force push. Contact Support for this.
+  \item \textbf{Add it to \co{.gitignore}} so it cannot recur.
+\end{enumerate}
+
+\subsection{Prevention}
+
+\begin{shell}
+gh secret set API_KEY
+gh api -X PATCH repos/:owner/:repo -F security_and_analysis[secret_scanning][status]=enabled
+\end{shell}
+
+GitHub's secret scanning is free on public repositories and detects the token
+formats of most major providers. \textbf{Push protection} goes further and blocks
+the push before the secret ever lands, which is the only intervention that actually
+prevents the problem.
+
+Locally, a pre-commit hook that scans staged changes catches it earlier still. Phase
+11 covers hooks, and tools like \co{gitleaks} plug straight into them.
+
+\begin{shell}
+gitleaks protect --staged
+\end{shell}
+
+\section{Identity housekeeping}
+
+Contributors change email addresses, and history ends up with the same person under
+three names. \co{.mailmap} fixes reporting without rewriting anything:
+
+\begin{terminal}
+Vidhu <physicsexplore2023@gmail.com> <old-address@university.edu>
+Shashwat Deep <shashwat@example.com> <shashwat@old.example.com>
+\end{terminal}
+
+Commit that file at the root and \co{git shortlog}, \co{git log} and \co{git blame}
+all collapse the duplicates.
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+Sign every commit with SSH & \co{git config -{}-global gpg.format ssh} \\
+ & \co{git config -{}-global commit.gpgsign true} \\
+Register a signing key & \co{gh ssh-key add <key> -{}-type signing} \\
+Check a signature & \co{git log -{}-show-signature -1} \\
+Annotated tag & \co{git tag -a v1.0.0 -m "..."} \\
+Signed tag & \co{git tag -s v1.0.0 -m "..."} \\
+Push tags & \co{git push -{}-tags} \\
+Release with generated notes & \co{gh release create v1.0.0 -{}-generate-notes} \\
+Remove a secret from history & \co{git filter-repo -{}-path <f> -{}-invert-paths} \\
+Store a secret properly & \co{gh secret set NAME} \\
+Merge duplicate identities & \co{.mailmap} at the repo root \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item Why can you commit under someone else's name, and what stops it mattering?
+  \item What exactly does GitHub's Verified badge prove?
+  \item Name two things a lightweight tag cannot do.
+  \item You pushed an API key ten minutes ago. What is step one, and why is it not
+    rewriting history?
+  \item Why do tags not go up with a normal \co{git push}?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 11, \emph{Configuration and automation}, on bending git to your
+habits: aliases, attributes, and hooks that run your linter before a bad commit can
+happen.
+
+\end{document}

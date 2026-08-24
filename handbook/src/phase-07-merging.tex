@@ -1,0 +1,365 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{7}
+\phasetitle{Merging deeply}
+\phasesubtitle{Strategies, why some merges make a commit, and teaching git to resolve a conflict once.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 7: Merging deeply},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{What a merge actually does}
+
+In the workshop you resolved a conflict by editing a file and running \co{git add}.
+That is the whole user-facing experience of merging, and it hides a fair amount of
+machinery worth understanding, because the machinery is what determines whether your
+project's history is readable in a year.
+
+A merge combines two branches. Git does it in one of two ways, and which one you get
+depends entirely on the shape of the history.
+
+\section{Fast-forward versus three-way}
+
+\subsection{Fast-forward}
+
+You branched off \co{main}, made two commits, and \co{main} has not moved since.
+
+\begin{terminal}
+A---B  main
+     \
+      C---D  feature
+\end{terminal}
+
+To merge \co{feature} into \co{main}, git does not need to combine anything. It just
+moves the \co{main} label forward to \co{D}.
+
+\begin{terminal}
+A---B---C---D  main, feature
+\end{terminal}
+
+That is a \textbf{fast-forward}. No merge commit is created, because nothing was
+merged. The history becomes a straight line, and afterwards there is no record that
+a branch ever existed.
+
+\subsection{Three-way merge}
+
+Now \co{main} has moved on while you worked.
+
+\begin{terminal}
+A---B---E---F  main
+     \
+      C---D  feature
+\end{terminal}
+
+There is no way to move a label and get a correct answer. Git finds the \textbf{merge
+base}, the most recent commit both branches share, which is \co{B}. Then it compares
+three points: the base, and each of the two tips. Hence three-way.
+
+Where only one side changed a region, git takes that change. Where both changed the
+same region differently, it stops and asks you. That is a conflict, and it is the
+only situation in which git ever asks.
+
+The result is a \textbf{merge commit}, the only kind of commit with two parents:
+
+\begin{terminal}
+A---B---E---F---M  main
+     \         /
+      C---D---'
+\end{terminal}
+
+\begin{why}
+Understanding that conflicts only happen when \emph{both} sides changed the same
+region explains why the Phase 3 exercise worked. Everyone inserted a name at the
+same position in the credits block, so every branch after the first had both sides
+changing the same region. If people had added names in different places, git would
+have merged them silently.
+
+It also explains the Phase 2 filename rule. Different files never share a region, so
+they can never conflict.
+\end{why}
+
+\subsection{Controlling which one you get}
+
+\begin{shell}
+git merge --no-ff feature
+\end{shell}
+
+Forces a merge commit even when a fast-forward was possible. The branch stays
+visible in the history as a distinct piece of work.
+
+\begin{shell}
+git merge --ff-only feature
+\end{shell}
+
+Refuses to merge unless it can fast-forward. Useful in scripts and as a safety
+check: it fails rather than silently creating a merge you did not intend.
+
+\begin{shell}
+git merge --squash feature
+\end{shell}
+
+Takes all the changes, stages them, and makes no commit. You commit once yourself.
+The branch's individual commits are not recorded at all. This is what GitHub's
+``Squash and merge'' button does.
+
+\section{Which button on GitHub}
+
+Every pull request offers three merge options, and teams argue about them. They map
+directly onto the above.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{3.4cm} X@{}}
+\toprule
+\rhtablehead{Option} & \rhtablehead{What you get} \\
+\midrule
+Create a merge commit & Every commit from the branch, plus a merge commit. Full
+history, more noise. \\
+Squash and merge & One commit on \co{main} containing everything. Clean history,
+individual steps lost. \\
+Rebase and merge & Each commit replayed onto \co{main}, no merge commit. Linear
+history, hashes change. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{note}
+For a workshop, and for most student projects, \textbf{squash and merge} is the
+right default. Contributors are still learning to make tidy commits, and squashing
+means a messy branch still produces one clean entry on \co{main}.
+
+For a project where contributors write careful, self-contained commits, squashing
+throws away real information, and a merge commit or rebase preserves it.
+
+There is no universally correct answer, which is why the argument never ends. Pick
+one, write it in \co{CONTRIBUTING.md}, and stop discussing it.
+\end{note}
+
+\section{Merge strategies}
+
+The strategy is the algorithm git uses to combine the trees.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.9cm} X@{}}
+\toprule
+\rhtablehead{Strategy} & \rhtablehead{Use} \\
+\midrule
+\co{ort} & The default since Git 2.34. Handles renames and directory moves far
+better than what it replaced. You will almost never specify it. \\
+\co{recursive} & The old default. Still available, no longer necessary. \\
+\co{resolve} & Older and simpler, handles only two heads. \\
+\co{octopus} & Merges more than two branches at once. Refuses if there are
+conflicts. Rare. \\
+\co{ours} & Discards the other branch's changes entirely, keeps the merge commit as
+a record. \\
+\co{subtree} & For merging a project into a subdirectory of another. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{shell}
+git merge -s ours old-branch
+\end{shell}
+
+\subsection{Strategy options, which are different}
+
+This is a genuine trap. \co{-s ours} is a strategy. \co{-X ours} is an option
+\emph{to} a strategy, and it means something much narrower.
+
+\begin{shell}
+git merge -X ours feature
+\end{shell}
+
+This does a normal merge, taking every non-conflicting change from both sides, and
+resolves only the \emph{conflicting} regions in favour of your side.
+
+\begin{trap}
+\co{-s ours} throws away everything from the other branch. \co{-X ours} keeps
+everything that did not conflict.
+
+The letter is the only difference and the outcomes are wildly different. If you mean
+``take their version when we disagree'' you want \co{-X theirs}. If you type
+\co{-s theirs} you will get an error, because it does not exist, which is the one
+piece of luck in this design.
+\end{trap}
+
+\section{Better conflict markers}
+
+The default conflict display shows you two versions. There is a better one.
+
+\begin{shell}
+git config --global merge.conflictStyle zdiff3
+\end{shell}
+
+Now conflicts include the original, from before either side changed it:
+
+\begin{terminal}
+<<<<<<< HEAD
+timeout = 30
+||||||| base
+timeout = 10
+=======
+timeout = 60
+>>>>>>> feature
+\end{terminal}
+
+The middle section changes everything. Without it you see two numbers and have to
+guess the intent. With it you can see that one side tripled the timeout and the
+other sextupled it, both were raising it from ten, and the answer is probably sixty
+rather than a random pick.
+
+\co{diff3} is the older version of the same idea. \co{zdiff3} is tidier and
+available from Git 2.35 onwards. There is no reason not to turn it on.
+
+\section{rerere}
+
+\textbf{Re}use \textbf{re}corded \textbf{re}solution. Git watches how you resolve a
+conflict and, if it ever sees the identical conflict again, resolves it the same way
+without asking.
+
+\begin{shell}
+git config --global rerere.enabled true
+\end{shell}
+
+That is the entire setup. From then on it works quietly.
+
+\begin{why}
+This sounds like a small convenience until you have a long-lived branch that you
+rebase onto a moving \co{main} every day. Without \co{rerere} you resolve the same
+three conflicts every single time, identically, forever. With it you resolve them
+once.
+
+It also helps in the ordinary case of a merge that you abort, reconsider, and redo.
+Git remembers what you decided the first time.
+\end{why}
+
+Inspect what it has stored:
+
+\begin{shell}
+git rerere status
+git rerere diff
+git rerere forget <path>
+\end{shell}
+
+\co{forget} is what you want when you resolved something wrongly and git is now
+cheerfully repeating your mistake.
+
+\section{Merge tools}
+
+For a conflict spanning many regions, editing markers by hand gets tiring.
+
+\begin{shell}
+git mergetool
+\end{shell}
+
+This opens a three-pane view: their version, the merged result, yours. Configure
+which program it uses:
+
+\begin{shell}
+git config --global merge.tool vscode
+git config --global mergetool.vscode.cmd "code --wait $MERGED"
+git config --global mergetool.keepBackup false
+\end{shell}
+
+That last line stops git leaving \co{.orig} files everywhere, which is otherwise a
+persistent small annoyance.
+
+\begin{note}
+Editors have quietly made this obsolete for most people. VS Code, JetBrains IDEs and
+Neovim all detect conflict markers and offer ``accept current, accept incoming,
+accept both'' inline. That is usually faster than a separate three-pane tool.
+
+Knowing what the markers mean still matters, because the buttons are just editing
+text and you need to know when ``accept both'' is wrong.
+\end{note}
+
+\section{Branching workflows}
+
+The strategies above are mechanics. A workflow is the social agreement about which
+branches exist and what may be merged into them.
+
+\subsection{GitHub flow}
+
+One long-lived branch, \co{main}, which is always deployable. Every change is a short
+branch that becomes a pull request and is merged and deleted.
+
+That is the whole workflow. It is what this repository uses, what most web projects
+use, and what you should default to.
+
+\subsection{Trunk-based development}
+
+Everyone commits to \co{main}, many times a day, with branches living hours rather
+than days. Unfinished work is hidden behind feature flags rather than in branches.
+
+Requires strong automated testing, because there is no branch to hold broken work.
+Used heavily at large companies where long-lived branches cause more pain than
+feature flags do.
+
+\subsection{Git flow}
+
+Five kinds of branch: \co{main}, \co{develop}, \co{feature/*}, \co{release/*},
+\co{hotfix/*}. Designed in 2010 for software shipped as versioned downloads.
+
+\begin{note}
+Git flow is widely taught and, for most projects today, the wrong choice. Its author
+has since added a note to the original article saying it was designed for a world
+where you release versioned software on a schedule, and that continuously deployed
+web applications should use something simpler.
+
+If you inherit it, fine. Do not adopt it for a student project. The overhead is real
+and the benefit only appears when you genuinely maintain several released versions
+at once.
+\end{note}
+
+\subsection{Merge queues}
+
+On a busy repository, a pull request can be tested against a \co{main} that changes
+before it merges, so a green PR can still break \co{main}.
+
+A merge queue solves this: pull requests enter a queue, each is tested against the
+result of everything ahead of it, and merges only if that passes. GitHub has this
+built in, under branch protection settings. It becomes worth the setup somewhere
+around the point where merge collisions happen weekly.
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.2cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+Always record the branch & \co{git merge -{}-no-ff <branch>} \\
+Refuse anything but a fast-forward & \co{git merge -{}-ff-only <branch>} \\
+Combine into one commit yourself & \co{git merge -{}-squash <branch>} \\
+Prefer my side on conflicts only & \co{git merge -X ours <branch>} \\
+Prefer their side on conflicts only & \co{git merge -X theirs <branch>} \\
+Discard their branch, keep the record & \co{git merge -s ours <branch>} \\
+See the original in conflicts & \co{git config merge.conflictStyle zdiff3} \\
+Never resolve the same conflict twice & \co{git config rerere.enabled true} \\
+Find where two branches diverged & \co{git merge-base main feature} \\
+Back out of a merge & \co{git merge -{}-abort} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item When does git fast-forward instead of making a merge commit?
+  \item What are the three inputs to a three-way merge?
+  \item Explain the difference between \co{-s ours} and \co{-X ours}.
+  \item What does \co{zdiff3} add to a conflict marker, and why is it useful?
+  \item Your branch conflicts with \co{main} the same way every day. What do you
+    turn on?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 8, \emph{Remotes and big repositories}, covering what a refspec
+is, how to work on several branches at once without stashing, and what to do when
+the repository is too large to clone comfortably.
+
+\end{document}

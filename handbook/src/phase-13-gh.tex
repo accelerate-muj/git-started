@@ -1,0 +1,306 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{13}
+\phasetitle{The gh CLI in full}
+\phasesubtitle{Never leave the terminal, and reach the parts of GitHub that have no command.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 13: The gh CLI in full},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Why bother}
+
+The web interface is fine. The argument for \co{gh} is not speed of a single action,
+it is that everything becomes scriptable.
+
+``Add twelve people to a repository'' is twelve pages of clicking, or one loop.
+``Which of my pull requests have failing checks'' is a lot of tab switching, or one
+command. Phase 3's collaborator invitations were a \co{gh api} call for exactly this
+reason.
+
+\section{Auth and config}
+
+\begin{shell}
+gh auth login
+gh auth status
+gh auth token
+gh auth refresh --scopes admin:org,workflow
+gh auth logout
+gh auth switch
+\end{shell}
+
+\co{gh auth refresh} is worth knowing. When a command fails with a permissions error,
+it is usually a missing scope rather than a real permission problem, and this adds
+one without logging out.
+
+\begin{shell}
+gh config set editor "code --wait"
+gh config set git_protocol ssh
+gh config set prompt disabled
+gh config list
+\end{shell}
+
+\section{Repositories}
+
+\begin{shell}
+gh repo create my-project --public --clone
+gh repo create --source=. --public --push
+gh repo create team-alpha --template accelerate-muj/git-started-team --public --clone
+gh repo clone accelerate-muj/git-started
+gh repo fork accelerate-muj/git-started --clone
+gh repo sync my-username/git-started
+gh repo view accelerate-muj/git-started --web
+gh repo list accelerate-muj --limit 100
+gh repo edit --description "..." --add-topic git --add-topic workshop
+gh repo archive old-project
+gh repo delete unwanted-project
+\end{shell}
+
+\begin{note}
+\co{gh repo delete} needs the \co{delete\_repo} scope, which is not granted by
+default. That is deliberate friction on an irreversible action, and it is a
+reasonable design.
+\end{note}
+
+\section{Pull requests}
+
+The largest command group, and the one that saves the most time.
+
+\begin{shell}
+gh pr create --fill
+gh pr create --title "..." --body "..." --base main --draft
+gh pr create --reviewer shashwat-deep --assignee @me --label enhancement
+gh pr list --state open --author @me
+gh pr list --search "review-requested:@me"
+gh pr status
+gh pr view 42
+gh pr view 42 --comments
+gh pr diff 42
+gh pr checkout 42
+gh pr review 42 --approve
+gh pr review 42 --request-changes --body "See the comment on line 40"
+gh pr review 42 --comment --body "Two small things"
+gh pr merge 42 --squash --delete-branch
+gh pr merge 42 --merge --auto
+gh pr close 42
+gh pr ready 42
+gh pr checks 42
+gh pr comment 42 --body "Rebased onto main"
+\end{shell}
+
+Two of these deserve highlighting.
+
+\co{gh pr checkout 42} fetches the contributor's branch, including from a fork, and
+checks it out locally. It handles the remote juggling for you. Reviewing code you can
+run is a different activity from reading a diff, and this is what makes it a
+one-command activity.
+
+\co{gh pr merge --auto} queues the merge for when checks pass. Enable it and walk
+away, rather than watching a CI run for eleven minutes.
+
+\section{Issues, releases, workflows}
+
+\begin{shell}
+gh issue create --title "..." --body "..." --label bug --assignee @me
+gh issue list --state open --label bug --limit 50
+gh issue develop 42 --checkout
+\end{shell}
+
+\co{gh issue develop} creates a branch linked to an issue and checks it out. The link
+shows on the issue, so the connection exists before the pull request does.
+
+\begin{shell}
+gh release create v1.0.0 --generate-notes
+gh release upload v1.0.0 ./dist/app.zip
+gh release download v1.0.0 --pattern "*.zip"
+gh release list
+\end{shell}
+
+\begin{shell}
+gh workflow list
+gh workflow run deploy.yml --ref main -f environment=staging
+gh workflow disable deploy.yml
+gh run list --workflow=ci.yml --limit 10
+gh run view <run-id> --log
+gh run view <run-id> --log-failed
+gh run watch <run-id>
+gh run rerun <run-id> --failed
+gh run cancel <run-id>
+\end{shell}
+
+\co{gh run view --log-failed} prints only the failing steps' output. On a large
+matrix build that is the difference between reading six lines and scrolling through
+four thousand.
+
+\section{gh api}
+
+The escape hatch, and the reason \co{gh} can do anything GitHub can.
+
+\begin{shell}
+gh api user
+gh api repos/accelerate-muj/git-started
+gh api repos/:owner/:repo/branches
+\end{shell}
+
+\co{:owner} and \co{:repo} are filled in from the current directory's repository.
+
+\subsection{Methods and fields}
+
+\begin{shell}
+gh api -X PUT repos/:owner/:repo/collaborators/someone -f permission=push
+gh api -X POST repos/:owner/:repo/issues -f title="Bug" -f body="Details"
+gh api -X PATCH repos/:owner/:repo -F has_issues=true
+gh api -X DELETE repos/:owner/:repo/collaborators/someone
+\end{shell}
+
+\begin{trap}
+\co{-f} sends the value as a string. \co{-F} lets git interpret it, so booleans and
+numbers are sent as booleans and numbers.
+
+\co{-f has\_issues=true} sends the string \co{"true"}, which some endpoints reject
+and others silently ignore. Use \co{-F} for anything that is not text. This is a
+recurring half hour of confusion for people scripting against the API.
+\end{trap}
+
+\subsection{Filtering output}
+
+\co{gh} has \co{jq} built in, so you do not need it installed:
+
+\begin{shell}
+gh api repos/:owner/:repo/pulls --jq '.[].title'
+gh api repos/:owner/:repo/pulls --jq '.[] | "\(.number)  \(.user.login)  \(.title)"'
+gh api repos/accelerate-muj/git-started/contributors --jq '.[].login'
+gh api user/repos --paginate --jq '.[] | select(.fork == false) | .name'
+\end{shell}
+
+\co{--paginate} follows every page automatically, which matters because the API
+returns thirty items by default and quietly truncates otherwise.
+
+\subsection{GraphQL}
+
+Some things, notably Projects, only exist in the GraphQL API:
+
+\begin{shell}
+gh api graphql -f query='
+  query {
+    viewer {
+      login
+      repositories(first: 5, orderBy: {field: PUSHED_AT, direction: DESC}) {
+        nodes { name pushedAt }
+      }
+    }
+  }'
+\end{shell}
+
+\begin{tryit}
+Phase 3's collaborator loop, for a whole team at once:
+
+\begin{shell}
+for user in alice bob charlie dev; do
+  gh api -X PUT "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/collaborators/$user" -f permission=push
+done
+\end{shell}
+
+Then check who has accepted:
+
+\begin{shell}
+gh api repos/:owner/:repo/invitations --jq '.[].invitee.login'
+\end{shell}
+\end{tryit}
+
+\section{Aliases}
+
+\begin{shell}
+gh alias set prs 'pr list --author @me'
+gh alias set review 'pr list --search "review-requested:@me"'
+gh alias set co 'pr checkout'
+gh alias set bugs 'issue list --label bug --state open'
+gh alias list
+\end{shell}
+
+Shell aliases with \co{--shell} can take arguments and use pipes:
+
+\begin{shell}
+gh alias set --shell teamup 'gh api -X PUT repos/$1/collaborators/$2 -f permission=push'
+gh teamup accelerate-muj/git-started someone
+\end{shell}
+
+\section{Extensions}
+
+\begin{shell}
+gh extension search
+gh extension install dlvhdr/gh-dash
+gh extension list
+gh extension upgrade --all
+\end{shell}
+
+\co{gh-dash} is a terminal dashboard of your pull requests and issues, and it is the
+one most people keep. Extensions are just repositories named \co{gh-something} with
+an executable, so writing one is a short afternoon.
+
+\section{gh inside Actions}
+
+\co{gh} is preinstalled on GitHub-hosted runners. It needs a token in the
+environment:
+
+\begin{terminal}
+- name: Comment on the PR
+  env:
+    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: gh pr comment "$PR" --body "Build finished"
+\end{terminal}
+
+This is exactly how the Phase 2 poem checker works in this repository. Look at
+\co{.github/workflows/check-poem.yml} for a complete example.
+
+\begin{trap}
+The automatic \co{GITHUB\_TOKEN} is scoped to the repository the workflow runs in,
+and its permissions are whatever the \co{permissions:} block grants. If a \co{gh}
+call in CI fails with a 403, the fix is almost always adding the right permission to
+that block rather than creating a personal token.
+
+Reach for a personal access token only when you genuinely need to touch a
+\emph{different} repository, and store it as a secret.
+\end{trap}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+Repo from the current folder & \co{gh repo create -{}-source=. -{}-public -{}-push} \\
+Repo from a template & \co{gh repo create <name> -{}-template <repo>} \\
+Check out someone's PR & \co{gh pr checkout 42} \\
+Merge when checks pass & \co{gh pr merge 42 -{}-squash -{}-auto} \\
+Only the failing CI output & \co{gh run view <id> -{}-log-failed} \\
+Branch linked to an issue & \co{gh issue develop 42 -{}-checkout} \\
+Add a collaborator & \co{gh api -X PUT repos/:owner/:repo/collaborators/<u>} \\
+Every page of a list & \co{gh api <endpoint> -{}-paginate} \\
+Boolean field to the API & \co{-F key=true}, never \co{-f} \\
+Save a command as a word & \co{gh alias set <name> '<command>'} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item What does \co{gh pr checkout} do that \co{git fetch} alone does not?
+  \item Difference between \co{-f} and \co{-F} on \co{gh api}, and when it bites.
+  \item Why do you need \co{-{}-paginate}?
+  \item A \co{gh} call in a workflow returns 403. What is the first thing to check?
+  \item Write an alias that lists pull requests waiting on your review.
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 14, \emph{Actions and CI/CD}, on making the repository do work
+by itself: running tests on every pull request, and deploying when you tag a release.
+
+\end{document}

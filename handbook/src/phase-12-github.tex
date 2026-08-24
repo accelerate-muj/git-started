@@ -1,0 +1,318 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{12}
+\phasetitle{GitHub as a platform}
+\phasesubtitle{Everything that is not git: issues, projects, pages, and search done properly.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 12: GitHub as a platform},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Where git stops}
+
+Git is a program for recording versions of a folder. It has no concept of a pull
+request, an issue, a review, a label, a milestone, or a discussion. None of those are
+in git and none of them ever will be.
+
+Everything in this phase is GitHub's, built on top. That is why the workshop needed
+two tools: \co{git} to move commits, \co{gh} to touch anything in this document.
+
+\begin{why}
+Keeping the boundary clear pays off constantly. When something behaves oddly, the
+first question is which system owns it. A rejected push is git. A pull request that
+will not merge is GitHub. A conflict is git. A required review is GitHub.
+
+It also tells you what survives if you leave. Your commits are yours and clone in
+full. Your issues, reviews and discussions are GitHub's, and moving them means an
+export tool.
+\end{why}
+
+\section{Issues}
+
+An issue is a thread with a state, a title, labels, an assignee, and a number.
+
+\begin{shell}
+gh issue create --title "Parser fails on blank lines" --body "..."
+gh issue list --state open --label bug
+gh issue list --assignee "@me"
+gh issue view 42
+gh issue view 42 --comments
+gh issue comment 42 --body "Reproduced on Windows too"
+gh issue close 42 --reason "not planned"
+gh issue reopen 42
+gh issue edit 42 --add-label bug --add-assignee shashwat-deep
+gh issue transfer 42 accelerate-muj/other-repo
+\end{shell}
+
+\subsection{Linking issues to pull requests}
+
+Put a closing keyword in the pull request description:
+
+\begin{terminal}
+Closes #42
+Fixes #17, closes #18
+Resolves accelerate-muj/other-repo#9
+\end{terminal}
+
+When the pull request merges, GitHub closes those issues automatically and records
+the link both ways. Six months later the issue shows exactly which change resolved
+it, which is the kind of thing you only appreciate when you need it.
+
+\begin{note}
+The keyword must be in the pull request body or a commit message, not in a comment
+added afterwards. \co{Closes \#42} typed as a comment does nothing except look like
+it worked.
+\end{note}
+
+\subsection{Templates}
+
+Put templates in \co{.github/ISSUE\_TEMPLATE/}. A YAML form gives you structured
+fields rather than a blank box people ignore:
+
+\begin{terminal}
+name: Bug report
+description: Something does not work
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Git version
+      description: Output of `git --version`
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+    validations:
+      required: true
+\end{terminal}
+
+Add \co{.github/ISSUE\_TEMPLATE/config.yml} to point people elsewhere for things
+that are not bugs:
+
+\begin{terminal}
+blank_issues_enabled: false
+contact_links:
+  - name: Question about the workshop
+    url: https://github.com/accelerate-muj/git-started/discussions
+    about: Ask here instead of opening an issue
+\end{terminal}
+
+\subsection{Labels and milestones}
+
+\begin{shell}
+gh label create "good first issue" --color 7057ff --description "Good for newcomers"
+gh label list
+gh issue list --label "good first issue"
+\end{shell}
+
+\co{good first issue} and \co{help wanted} are special: GitHub surfaces repositories
+using them in its own discovery pages. If you want outside contributors, they are
+worth using accurately rather than decoratively.
+
+Milestones group issues toward a target, and show a progress bar. Useful for a
+release or an event, less useful as a permanent bucket.
+
+\section{Projects}
+
+Projects are spreadsheets and boards over issues and pull requests, with custom
+fields you define: status, priority, effort, iteration, or anything else.
+
+\begin{shell}
+gh project list --owner accelerate-muj
+gh project item-list 3 --owner accelerate-muj
+gh project item-add 3 --owner accelerate-muj --url <issue-url>
+\end{shell}
+
+The useful part is built-in automation: an item moves to Done when its pull request
+merges, or to In Progress when someone is assigned. Set it up once and the board
+stops needing manual maintenance, which is the only reason boards survive.
+
+\begin{note}
+Projects are per user or per organisation, not per repository, so one board can span
+several repositories. That is the main reason to use them over a simple label
+scheme.
+\end{note}
+
+\section{Discussions}
+
+Issues are for things with a resolution. Discussions are for things without one:
+questions, ideas, showing off what you built.
+
+Categories can be Q\&A, where answers can be marked accepted, which makes
+Discussions a decent support forum for a club or a small project.
+
+\begin{shell}
+gh api repos/:owner/:repo/discussions --jq '.[].title'
+\end{shell}
+
+Enable them under repository settings. For a workshop repository they are worth
+having, because otherwise every question becomes an issue and the issue list stops
+being a list of work.
+
+\section{Pages}
+
+Free static hosting from a repository.
+
+\begin{shell}
+gh api -X POST repos/:owner/:repo/pages -f source[branch]=main -f source[path]=/docs
+gh browse --settings
+\end{shell}
+
+Three ways to publish: a branch, a \co{/docs} folder, or a GitHub Actions workflow.
+The Actions route is what any static site generator uses, and it is covered in Phase
+14.
+
+Add a \co{CNAME} file containing your domain to use a custom one. HTTPS is automatic.
+
+\section{Gists}
+
+A gist is a tiny repository for a snippet. It has full git history and can be cloned,
+which people forget.
+
+\begin{shell}
+gh gist create script.sh --public --desc "Bisect helper"
+gh gist create --filename notes.md -
+gh gist list
+gh gist edit <id>
+gh gist clone <id>
+\end{shell}
+
+\begin{trap}
+A secret gist is unlisted, not private. Anyone with the URL can read it, and the URL
+is not protected. Never put credentials in one.
+\end{trap}
+
+\section{Search, properly}
+
+GitHub's search syntax is genuinely powerful and almost nobody learns it.
+
+\subsection{Finding code}
+
+\begin{terminal}
+language:python "def parse_sonnet"
+repo:accelerate-muj/git-started path:*.tex rerere
+org:accelerate-muj filename:.gitattributes
+"force-with-lease" NOT test language:markdown
+/git\s+rebase\s+--onto/
+\end{terminal}
+
+The last one is a regular expression, which the current code search supports. Also
+useful: \co{symbol:functionName} finds definitions rather than every mention.
+
+\subsection{Finding issues and pull requests}
+
+\begin{terminal}
+is:issue is:open label:bug sort:created-desc
+is:pr is:merged author:@me
+is:pr review-requested:@me is:open
+is:pr is:open draft:false -author:@me
+is:issue no:assignee label:"good first issue"
+is:pr merged:>2026-08-01
+is:issue involves:@me updated:>2026-08-20
+\end{terminal}
+
+\co{review-requested:@me is:open} is the one to bookmark. It is your actual queue,
+and it is not the same as your notifications.
+
+\subsection{Finding repositories}
+
+\begin{terminal}
+stars:>1000 language:rust pushed:>2026-01-01
+org:accelerate-muj archived:false
+topic:workshop topic:git
+\end{terminal}
+
+From the terminal:
+
+\begin{shell}
+gh search code "force-with-lease" --owner accelerate-muj
+gh search issues --label bug --state open --owner accelerate-muj
+gh search prs --review-requested @me --state open
+gh search repos --topic workshop --sort stars
+\end{shell}
+
+\section{Notifications}
+
+The default is to notify on everything you are subscribed to, which quickly becomes
+noise that gets ignored entirely.
+
+\begin{shell}
+gh api notifications --jq '.[] | "\(.subject.type)  \(.repository.full_name)  \(.subject.title)"'
+gh api -X PUT notifications -f read=true
+\end{shell}
+
+Worth doing in the web interface once: set watching to \textbf{Participating and
+mentions} for repositories you contribute to occasionally, and \textbf{All activity}
+only for ones you maintain. \co{@mentions} and review requests still reach you either
+way.
+
+\section{Things that are quietly useful}
+
+\begin{description}
+  \item[Keyboard shortcuts] Press \co{?} on any page. \co{t} opens the file finder in
+    a repository, \co{l} jumps to a line, \co{s} focuses search, and \co{.} opens the
+    repository in a web editor.
+  \item[Press the full stop key] Genuinely. \co{.} in any repository opens VS Code in
+    the browser, editing that repository. \co{github.dev} in the URL does the same.
+  \item[Blame from the browser] \co{b} on a file view. Combined with
+    \co{.git-blame-ignore-revs} from Phase 6 it is better than most local tools.
+  \item[Permalinks] Press \co{y} on a file view and the URL rewrites to a specific
+    commit. Without it, a line link rots the moment the file changes.
+  \item[Suggested changes] In a review, use a \co{suggestion} code block and the
+    author can apply your edit with one click.
+  \item[Draft pull requests] \co{gh pr create -{}-draft} marks work as in progress.
+    Reviewers are not requested until you mark it ready.
+  \item[CODEOWNERS] Automatically requests review from the right people per path.
+    Phase 15.
+  \item[Dependabot] Opens pull requests for outdated or vulnerable dependencies. Add
+    \co{.github/dependabot.yml}.
+  \item[Insights] The repository's Insights tab has contributor graphs, traffic, and
+    a dependency graph. Traffic is the only place to see clone and view counts.
+\end{description}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command or syntax} \\
+\midrule
+Close an issue when a PR merges & \co{Closes \#42} in the PR body \\
+My review queue & \co{is:pr review-requested:@me is:open} \\
+Unassigned beginner issues & \co{is:issue no:assignee label:"good first issue"} \\
+Search code in an org & \co{gh search code "text" -{}-owner <org>} \\
+Open the web editor & press \co{.} in any repository \\
+Permalink to a line & press \co{y} on the file view \\
+Create a draft PR & \co{gh pr create -{}-draft} \\
+Structured issue forms & \co{.github/ISSUE\_TEMPLATE/*.yml} \\
+Redirect questions elsewhere & \co{ISSUE\_TEMPLATE/config.yml} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item Which things in this phase exist in git itself? (Careful.)
+  \item Why does \co{Closes \#42} in a comment not close the issue?
+  \item What is the difference between a secret gist and a private one?
+  \item Write the search that finds open pull requests waiting on your review.
+  \item When should something be a Discussion rather than an Issue?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 13, \emph{The gh CLI in full}, including \co{gh api}, which
+reaches every part of GitHub that has no dedicated command.
+
+\end{document}

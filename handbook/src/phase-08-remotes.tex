@@ -1,0 +1,348 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{8}
+\phasetitle{Remotes and big repositories}
+\phasesubtitle{Refspecs, worktrees, submodules, and what to do when a clone takes an hour.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 8: Remotes and big repositories},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{A remote is just a URL with a nickname}
+
+In the workshop you used \co{origin} and \co{upstream} without much explanation.
+There is nothing special about either name. A remote is a nickname for a URL, plus
+some default rules about which branches map to which.
+
+\begin{shell}
+git remote -v
+git remote add fork https://github.com/someone/project.git
+git remote rename origin github
+git remote set-url origin git@github.com:me/project.git
+git remote remove old-thing
+\end{shell}
+
+You can have as many as you like. Working on someone's pull request often means
+adding their fork as a remote, fetching, and checking out their branch, which is
+exactly what \co{gh pr checkout} automates for you.
+
+\section{Refspecs}
+
+This is the piece of git that looks like line noise and explains a surprising amount
+of behaviour once you can read it.
+
+\begin{shell}
+git config --get remote.origin.fetch
+\end{shell}
+
+\begin{terminal}
++refs/heads/*:refs/remotes/origin/*
+\end{terminal}
+
+Read it as \co{<source>:<destination>}. It says: take everything under
+\co{refs/heads/} on the remote, and store it locally under
+\co{refs/remotes/origin/}. The leading \co{+} means allow non-fast-forward updates.
+
+This is why \co{origin/main} exists as a thing separate from \co{main}. They are two
+different refs. \co{main} is your branch. \co{origin/main} is your local record of
+where \co{main} was on the server the last time you fetched. \co{git fetch} updates
+the second and never touches the first, which is precisely why fetching is always
+safe.
+
+You can write refspecs by hand:
+
+\begin{shell}
+git push origin feature:main
+git push origin :old-branch
+git fetch origin main:local-copy-of-main
+\end{shell}
+
+The second one pushes nothing to \co{old-branch}, which deletes it. That is the
+original way to delete a remote branch, and \co{git push origin --delete old-branch}
+is the readable alias for it.
+
+\section{Tracking branches}
+
+\begin{shell}
+git branch -vv
+\end{shell}
+
+\begin{terminal}
+* main    a1b2c3d [origin/main] Add the cheatsheet
+  feature 8e1f4a7 [origin/feature: ahead 2, behind 1] Parser work
+\end{terminal}
+
+The bracketed part is the upstream and how far you have diverged. ``Ahead 2, behind
+1'' means you have two commits they do not, and they have one you do not. That is
+exactly the situation that produces a merge or a rebase.
+
+\begin{shell}
+git branch -u origin/main
+git push -u origin feature
+\end{shell}
+
+\co{-u} sets the upstream, which is what lets you later type bare \co{git push} and
+\co{git pull}.
+
+\begin{note}
+``Behind'' is measured against your last fetch, not against reality. If you have not
+fetched in a week, git will happily tell you that you are up to date. \co{git fetch}
+is what makes the answer current, and it changes nothing else, so there is no reason
+not to run it often.
+\end{note}
+
+\section{Fetch, pull, and the pull that surprises people}
+
+\co{git pull} is \co{git fetch} followed by \co{git merge}. When you have local
+commits and the remote has moved, that merge creates a merge commit, and you end up
+with ``Merge branch main of github.com...'' scattered through your history.
+
+\begin{shell}
+git config --global pull.rebase true
+\end{shell}
+
+Now \co{git pull} fetches and rebases instead, replaying your local commits on top of
+the remote ones. Your history stays linear and those noise commits disappear.
+
+\begin{trap}
+Since Git 2.27, running \co{git pull} with diverged branches and no configured
+preference prints a long warning and refuses. The three options it offers are
+\co{pull.rebase true}, \co{pull.rebase false}, and \co{pull.ff only}.
+
+Pick \co{true} for personal branches. Pick \co{only} if you would rather git refuse
+and let you decide each time, which is the most conservative choice and a reasonable
+one.
+\end{trap}
+
+Cleaning up references to branches that no longer exist on the server:
+
+\begin{shell}
+git fetch --prune
+git config --global fetch.prune true
+\end{shell}
+
+Without this, \co{git branch -r} accumulates every branch that was ever deleted, and
+after a few months of an active project the list is mostly ghosts.
+
+\section{Worktrees}
+
+You are halfway through a change and need to look at another branch. The usual
+answer is to stash, switch, look, switch back, and pop.
+
+Worktrees are better. They let one repository have several working directories, each
+on a different branch, all sharing one \co{.git}.
+
+\begin{shell}
+git worktree add ../project-hotfix hotfix/urgent
+git worktree add ../project-review -b review-pr-42
+git worktree list
+git worktree remove ../project-hotfix
+\end{shell}
+
+You now have two directories on disk, on two branches, both live. Your editor can
+have both open. Nothing was stashed and nothing was interrupted.
+
+\begin{why}
+The disk cost is only the working files, because the history is shared. For a repo
+with a long history and a small tree, a second worktree is nearly free.
+
+The pattern this is best at: reviewing someone's pull request while your own work
+stays exactly as you left it, including uncommitted changes and a running dev
+server.
+\end{why}
+
+\begin{trap}
+You cannot check out the same branch in two worktrees at once. Git refuses, and it
+is right to, because two directories editing one branch would be chaos.
+\end{trap}
+
+\section{Big repositories}
+
+When a clone takes too long or fills the disk, there are four separate tools and
+they solve different problems.
+
+\subsection{Shallow clone}
+
+Truncate the history.
+
+\begin{shell}
+git clone --depth 1 https://github.com/big/project.git
+\end{shell}
+
+You get the latest commit and nothing before it. Fast, small, and the standard
+choice in CI, where you almost never need history.
+
+Deepen later if you need to:
+
+\begin{shell}
+git fetch --deepen 50
+git fetch --unshallow
+\end{shell}
+
+\begin{trap}
+\co{git log} is nearly empty, \co{git blame} is useless, and \co{git bisect} cannot
+work. Shallow clones are for machines, not for the copy you develop in.
+\end{trap}
+
+\subsection{Partial clone}
+
+Get all the history, but download file contents only when actually needed.
+
+\begin{shell}
+git clone --filter=blob:none https://github.com/big/project.git
+\end{shell}
+
+You get every commit and tree, so \co{log}, \co{blame} and \co{bisect} all work.
+File contents are fetched on demand when you check out or diff.
+
+For most large repositories this is a better default than a shallow clone, and it is
+newer, so it is less widely known.
+
+\subsection{Sparse checkout}
+
+Get the whole history but only put part of the tree on disk. Useful in a monorepo
+where you work on one service out of forty.
+
+\begin{shell}
+git clone --filter=blob:none --sparse https://github.com/big/monorepo.git
+git sparse-checkout set services/parser libs/common
+git sparse-checkout list
+git sparse-checkout disable
+\end{shell}
+
+\subsection{Maintenance}
+
+Git can keep a large repository fast in the background.
+
+\begin{shell}
+git maintenance start
+\end{shell}
+
+This registers scheduled jobs that prefetch, repack, and keep the commit graph
+current. On a large repository the difference to \co{git log} and \co{git status}
+speed is noticeable.
+
+\section{Submodules}
+
+A submodule is a pointer to a specific commit in another repository, stored inside
+yours.
+
+\begin{shell}
+git submodule add https://github.com/other/lib.git vendor/lib
+git clone --recurse-submodules https://github.com/me/project.git
+git submodule update --init --recursive
+git submodule update --remote
+\end{shell}
+
+The parent repository records the submodule's URL in \co{.gitmodules} and the exact
+commit in its tree. That pinning is the point: everyone gets byte-identical
+dependencies.
+
+\begin{trap}
+Submodules have a poor reputation and it is earned. The recurring problems:
+
+\begin{itemize}
+  \item A plain \co{git clone} leaves submodule directories empty, and the error you
+    get later is confusing.
+  \item \co{git pull} does not update submodules unless you ask.
+  \item It is easy to commit a submodule pointer to a commit that only exists on
+    your machine, which breaks the build for everyone else and is baffling to
+    diagnose.
+  \item Branch switching in the parent does not move the submodule.
+\end{itemize}
+
+Turn on the setting that removes most of the surprise:
+
+\begin{shell}
+git config --global submodule.recurse true
+\end{shell}
+\end{trap}
+
+\subsection{Subtree, the alternative}
+
+\begin{shell}
+git subtree add --prefix=vendor/lib https://github.com/other/lib.git main --squash
+git subtree pull --prefix=vendor/lib https://github.com/other/lib.git main --squash
+\end{shell}
+
+Subtree copies the other project's files into yours as ordinary files. Anyone
+cloning gets everything with no extra commands and no special knowledge.
+
+The trade: your repository grows, and pushing changes back upstream is more awkward.
+
+\begin{note}
+Rough guidance. If contributors need to \emph{modify} the dependency and send
+changes back, submodule. If they just need it to be there and work, subtree, or
+honestly your language's package manager, which is usually the right answer to this
+whole question.
+\end{note}
+
+\section{Large files}
+
+Git stores a complete copy of every version of every file. That is fine for source
+code, which is small and compresses well, and bad for a 50 MB video edited twelve
+times.
+
+Git LFS replaces such files with small text pointers and stores the real contents
+separately.
+
+\begin{shell}
+git lfs install
+git lfs track "*.psd"
+git lfs track "*.mp4"
+git add .gitattributes
+git lfs ls-files
+\end{shell}
+
+\begin{trap}
+\co{git lfs track} only affects files added \emph{after} you set it up. Files
+already in history stay there at full size, and the repository stays large. Fixing
+that needs a history rewrite, which is Phase 5.
+
+Set up LFS before the first large commit. GitHub also enforces a hard 100 MB limit
+per file and will reject a push that exceeds it, which is a rude way to discover
+this.
+\end{trap}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+See where a branch is tracking & \co{git branch -vv} \\
+Delete a remote branch & \co{git push origin -{}-delete <branch>} \\
+Forget deleted remote branches & \co{git fetch -{}-prune} \\
+Rebase instead of merge on pull & \co{git config -{}-global pull.rebase true} \\
+Second branch checked out at once & \co{git worktree add ../dir <branch>} \\
+Fast clone for CI & \co{git clone -{}-depth 1 <url>} \\
+Full history, files on demand & \co{git clone -{}-filter=blob:none <url>} \\
+Only part of a monorepo & \co{git sparse-checkout set <paths>} \\
+Keep a big repo fast & \co{git maintenance start} \\
+Clone including submodules & \co{git clone -{}-recurse-submodules <url>} \\
+Track a binary type in LFS & \co{git lfs track "*.mp4"} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item What is the difference between \co{main} and \co{origin/main}?
+  \item Read this refspec aloud: \co{+refs/heads/*:refs/remotes/origin/*}
+  \item Why is \co{git fetch} always safe?
+  \item When would you use a worktree instead of \co{git stash}?
+  \item Shallow clone or partial clone, if you need \co{git blame} to work?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 9, \emph{Plumbing}, which opens up \co{.git} and shows you what
+a commit really is. After it, most of git's behaviour stops needing to be memorised.
+
+\end{document}

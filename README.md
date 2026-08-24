@@ -75,4 +75,6 @@ for the conflict mechanism and why it fires reliably, and
 [CONTRIBUTING.md](CONTRIBUTING.md) for the rule that keeps thirty simultaneous
 pull requests from colliding.
 
+See [`handbook/`](handbook/) for the thirteen-phase PDF handbook.
+
 Licensed MIT. Fork it, run it at your own club, change whatever you like.

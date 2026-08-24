@@ -1,0 +1,452 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{9}
+\phasetitle{Plumbing}
+\phasesubtitle{What is actually inside .git, and why a commit is not a diff.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 9: Plumbing},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Porcelain and plumbing}
+
+Git's own documentation splits its commands into two groups. \textbf{Porcelain} is
+the friendly layer you use every day: \co{add}, \co{commit}, \co{push}, \co{log}.
+\textbf{Plumbing} is the low-level machinery underneath: \co{hash-object},
+\co{cat-file}, \co{write-tree}, \co{update-ref}.
+
+You will not use plumbing in daily work. It is worth an hour anyway, because after
+this phase most of git's behaviour stops being a set of rules to memorise and starts
+being obvious.
+
+\begin{why}
+Specific things that stop being confusing once you have read this phase: why
+branches are cheap, why you cannot lose a commit that was made, why rebase changes
+hashes, why git is fast at things that ought to be slow, why moving a file is not
+tracked as a move, and why a merge conflict is genuinely the only situation where
+git cannot decide for itself.
+\end{why}
+
+\section{Inside .git}
+
+\begin{shell}
+cd my-sonnet
+ls -a .git
+\end{shell}
+
+\begin{terminal}
+HEAD          config       description    hooks/
+index         info/        logs/          objects/
+refs/
+\end{terminal}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.6cm} X@{}}
+\toprule
+\rhtablehead{Item} & \rhtablehead{Contains} \\
+\midrule
+\co{objects/} & Every version of everything, ever. The database. \\
+\co{refs/} & Branches and tags. Small files holding one hash each. \\
+\co{HEAD} & Which branch you are on. \\
+\co{index} & The staging area, as a binary file. \\
+\co{logs/} & The reflog. \\
+\co{config} & This repository's settings, including remotes. \\
+\co{hooks/} & Scripts git runs at certain moments. Phase 11. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+That is the whole repository. Copy this directory and you have copied the project
+including its entire history. Delete it and you have an ordinary folder.
+
+\section{Four kinds of object}
+
+The object database stores exactly four things.
+
+\begin{description}
+  \item[blob] The contents of a file. Just bytes. No name, no path, no permissions.
+  \item[tree] A directory listing. Names, modes, and the hash of the blob or tree
+    each name points to.
+  \item[commit] A pointer to one tree, plus parents, author, committer, timestamps,
+    and a message.
+  \item[tag] An annotated tag: a pointer to an object, plus a name, tagger and
+    message.
+\end{description}
+
+Every object is stored under the SHA of its own contents. This is the central idea,
+and everything else follows from it.
+
+\subsection{Watch it happen}
+
+\begin{tryit}
+\begin{shell}
+mkdir plumbing-demo && cd plumbing-demo && git init
+find .git/objects -type f
+\end{shell}
+
+Nothing. Now store some content directly, bypassing \co{git add} entirely:
+
+\begin{shell}
+echo "Shall I compare thee" | git hash-object -w --stdin
+\end{shell}
+
+Git prints a hash and writes one object. Look:
+
+\begin{shell}
+find .git/objects -type f
+\end{shell}
+
+\begin{terminal}
+.git/objects/8b/13727ee5c4b4b1e0e13a34e30f0b4d0b34e5a2
+\end{terminal}
+
+The first two characters of the hash are the directory, the rest is the filename.
+That is only to avoid putting a million files in one directory.
+
+Read it back:
+
+\begin{shell}
+git cat-file -p 8b13727
+git cat-file -t 8b13727
+git cat-file -s 8b13727
+\end{shell}
+
+\co{-p} prints the contents, \co{-t} the type, \co{-s} the size.
+\end{tryit}
+
+\subsection{The hash is the content}
+
+Store the same text twice and you get the same hash, and the second write does
+nothing because the object already exists.
+
+This is what \textbf{content addressed} means, and it has consequences that show up
+everywhere:
+
+\begin{itemize}
+  \item \textbf{Deduplication is automatic.} A file unchanged across a thousand
+    commits is stored once. Copy a file and both paths point at the same blob.
+  \item \textbf{Integrity is automatic.} If a byte in \co{.git/objects} is corrupted,
+    its contents no longer hash to its filename. \co{git fsck} finds it.
+  \item \textbf{History cannot be quietly edited.} Change any commit and its hash
+    changes, so every descendant's hash changes. That is not a security feature bolted
+    on, it is a side effect of the storage design.
+  \item \textbf{Rebasing must produce new hashes.} A rebased commit has a different
+    parent, so different content, so a different hash. There is no way around it.
+\end{itemize}
+
+\subsection{A commit is a snapshot, not a diff}
+
+This is the most common misconception about git, including among people who use it
+daily.
+
+A commit does not store what changed. It stores a pointer to a tree, and the tree
+describes the \emph{entire} project at that moment.
+
+\begin{shell}
+git add . && git commit -m "First"
+git cat-file -p HEAD
+\end{shell}
+
+\begin{terminal}
+tree 92b8a1c4f7e3d2b5a8c1f4e7d0b3a6c9f2e5d8b1
+author Vidhu <physicsexplore2023@gmail.com> 1756054800 +0530
+committer Vidhu <physicsexplore2023@gmail.com> 1756054800 +0530
+
+First
+\end{terminal}
+
+There is no diff anywhere in there. Follow the tree:
+
+\begin{shell}
+git cat-file -p 92b8a1c
+\end{shell}
+
+\begin{terminal}
+100644 blob 8b13727ee5c4b4b1e0e13a34e30f0b4d0b34e5a2    sonnet.md
+040000 tree 3f2a1b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a    poems
+\end{terminal}
+
+Names and permissions live in the tree, not the blob. A blob is anonymous content.
+
+\begin{deeper}
+Two things follow from this.
+
+\textbf{Git does not track renames.} It cannot, because there is nothing to track.
+When you move a file, the blob is unchanged and the tree lists it under a new name.
+When \co{git log -{}-follow} or \co{git diff -M} reports a rename, it is
+\emph{detecting} one after the fact by noticing that a blob disappeared from one
+path and an identical or similar one appeared at another. This is why renames are
+sometimes detected and sometimes not, and why the similarity threshold is
+configurable.
+
+\textbf{Every diff you have ever seen was computed on demand.} \co{git show},
+\co{git log -p} and every diff on GitHub are generated at the moment you ask, by
+comparing two trees. Git stores snapshots and calculates differences. Most other
+version control systems did the opposite.
+\end{deeper}
+
+\section{Refs, and what a branch really is}
+
+\begin{shell}
+cat .git/refs/heads/main
+\end{shell}
+
+\begin{terminal}
+a1b2c3d4e5f67890abcdef1234567890abcdef12
+\end{terminal}
+
+That is the entire branch. Forty-one bytes, a hash and a newline.
+
+\begin{why}
+This is why branching in git is instant and free, and why it was a revelation in
+2005. In older systems a branch meant copying the whole tree on the server, so
+branches were heavyweight things you asked permission for and created rarely.
+
+In git, creating a branch writes forty-one bytes. Deleting one removes forty-one
+bytes, which is also why deleting a branch never deletes any commits: you removed a
+label, not the thing it pointed at. Phase 4's branch recovery works because of this
+sentence.
+\end{why}
+
+\begin{shell}
+cat .git/HEAD
+\end{shell}
+
+\begin{terminal}
+ref: refs/heads/main
+\end{terminal}
+
+\co{HEAD} normally points at a branch, which points at a commit. When it contains a
+raw hash instead, you are in \textbf{detached HEAD} state, which is all that
+condition is: \co{HEAD} pointing directly at a commit with no branch in between.
+Commits you make there are real, but nothing references them, so they are only
+findable through the reflog.
+
+\begin{shell}
+ls .git/refs/heads .git/refs/tags .git/refs/remotes
+git show-ref
+git update-ref refs/heads/experiment a1b2c3d
+git symbolic-ref HEAD
+\end{shell}
+
+\begin{note}
+Once you have many refs, git packs them into \co{.git/packed-refs} and the individual
+files disappear. \co{git show-ref} reads both, so use it rather than \co{ls}.
+\end{note}
+
+\section{Building a commit by hand}
+
+Worth doing once. It removes the last of the mystery.
+
+\begin{tryit}
+\begin{shell}
+mkdir by-hand && cd by-hand && git init
+\end{shell}
+
+Make a blob:
+
+\begin{shell}
+echo "line one" | git hash-object -w --stdin
+\end{shell}
+
+Put it in the index under a name:
+
+\begin{shell}
+git update-index --add --cacheinfo 100644,<blob-sha>,poem.txt
+\end{shell}
+
+Turn the index into a tree:
+
+\begin{shell}
+git write-tree
+\end{shell}
+
+Make a commit pointing at that tree:
+
+\begin{shell}
+echo "Made by hand" | git commit-tree <tree-sha>
+\end{shell}
+
+Point a branch at it:
+
+\begin{shell}
+git update-ref refs/heads/main <commit-sha>
+\end{shell}
+
+Now:
+
+\begin{shell}
+git log
+git status
+\end{shell}
+
+An ordinary repository with an ordinary commit, and \co{git commit} was never run.
+That command is a convenience wrapper around exactly these five steps.
+\end{tryit}
+
+\section{The index}
+
+\co{.git/index} is a binary file listing every tracked path with its blob hash,
+permissions, and cached filesystem metadata: size, modification time, inode.
+
+That cache is why \co{git status} is fast. To decide whether a file changed, git
+compares stat information rather than reading and hashing every file in the project.
+Only when the metadata differs does it do real work.
+
+\begin{shell}
+git ls-files -s
+git ls-files -s --debug
+\end{shell}
+
+It also explains a class of confusing behaviour: if you restore a file from a backup
+and the timestamp changes, git may consider it modified even when the bytes are
+identical. And \co{git status} being slow on a huge repository is usually this
+cache being defeated, which is what \co{core.fsmonitor} exists to fix.
+
+\section{Packfiles}
+
+Storing every version as a separate compressed file would waste space on a project
+with long history. Periodically git repacks loose objects into a \textbf{packfile},
+where similar objects are stored as deltas against each other.
+
+\begin{shell}
+git count-objects -vH
+git gc
+git verify-pack -v .git/objects/pack/pack-*.idx | tail -5
+\end{shell}
+
+\begin{deeper}
+The delta compression here is not the same as storing diffs. Objects are still
+content addressed snapshots, and any object can be reconstructed independently. The
+deltas are purely a storage optimisation inside the pack, chosen by heuristics about
+which objects resemble each other, and they can even be between unrelated files.
+
+This is how a repository with a decade of history and hundreds of thousands of
+commits can clone in a few hundred megabytes. It is also why \co{git gc} sometimes
+shrinks a repository dramatically: loose objects that were stored individually get
+packed and deltified together.
+\end{deeper}
+
+\co{git gc} runs automatically when loose objects accumulate. It also prunes
+unreachable objects older than the grace period, which is the ninety day figure from
+Phase 4.
+
+\section{The commit graph}
+
+Every commit records its parents. Follow those pointers and you get a directed
+acyclic graph.
+
+\begin{itemize}
+  \item \textbf{Directed} because each commit points backwards to its parents, never
+    forwards. A commit has no idea what came after it.
+  \item \textbf{Acyclic} because a commit's hash includes its parents' hashes, so a
+    cycle would require a hash to contain itself.
+\end{itemize}
+
+Ordinary commits have one parent. Merge commits have two or more. The very first
+commit has none.
+
+\begin{shell}
+git rev-list --all --count
+git rev-parse HEAD
+git rev-parse HEAD~2
+git rev-parse main@{yesterday}
+git cat-file --batch-all-objects --batch-check
+\end{shell}
+
+\co{git rev-parse} is the general tool for turning any expression into a hash. Every
+place git accepts a commit, it accepts these forms:
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{4.4cm} X@{}}
+\toprule
+\rhtablehead{Expression} & \rhtablehead{Means} \\
+\midrule
+\co{HEAD\textasciitilde 3} & Three first-parent steps back \\
+\co{HEAD\^{}2} & The second parent, on a merge commit \\
+\co{main@\{2.days.ago\}} & Where \co{main} pointed then, via the reflog \\
+\co{HEAD@\{5\}} & Five reflog entries ago \\
+\co{main..feature} & Reachable from feature, not from main \\
+\co{main...feature} & Reachable from either, not from both \\
+\co{:/fix the parser} & The newest commit whose message matches \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{trap}
+\co{\textasciitilde} and \co{\^{}} are different and the difference only shows up at
+merge commits. \co{\textasciitilde n} walks \emph{n} steps back always following the
+first parent. \co{\^{}n} selects \emph{which} parent, without moving further.
+
+So \co{HEAD\textasciitilde 2} is two commits back, and \co{HEAD\^{}2} is the second
+parent of the current commit. On a linear history they are easy to confuse because
+\co{HEAD\textasciitilde 1} and \co{HEAD\^{}1} mean the same thing.
+\end{trap}
+
+\section{SHA-1 and what replaces it}
+
+Git has used SHA-1 since 2005, and SHA-1 has been considered cryptographically
+broken since the SHAttered collision in 2017.
+
+This matters less than it sounds, for two reasons. Git uses hashing mainly for
+integrity and addressing rather than as a security boundary, and since 2018 it ships
+with a hardened SHA-1 that detects the known collision attack and refuses.
+
+The real fix is SHA-256 support, which exists:
+
+\begin{shell}
+git init --object-format=sha256
+\end{shell}
+
+\begin{note}
+Do not use it yet for anything shared. SHA-256 repositories cannot interoperate with
+SHA-1 ones, and GitHub does not support them. The migration path is designed and
+partially built, and the ecosystem has not moved. Know that it exists and that the
+forty character hashes you see today are not permanent.
+\end{note}
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.4cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{Does} \\
+\midrule
+\co{git cat-file -p <sha>} & Print any object \\
+\co{git cat-file -t <sha>} & Its type \\
+\co{git hash-object -w <file>} & Store a file as a blob \\
+\co{git ls-tree HEAD} & List a tree \\
+\co{git ls-files -s} & Show the index \\
+\co{git rev-parse <expr>} & Resolve anything to a hash \\
+\co{git show-ref} & Every ref, packed or loose \\
+\co{git update-ref <ref> <sha>} & Move a ref by hand \\
+\co{git write-tree} & Index into a tree object \\
+\co{git commit-tree <tree>} & Tree into a commit object \\
+\co{git count-objects -vH} & Repository size \\
+\co{git fsck} & Check integrity, find orphans \\
+\co{git gc} & Repack and prune \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item Name the four object types and what each stores.
+  \item A commit stores a tree, not a diff. Give two consequences.
+  \item How many bytes is a branch, and what does that imply about deleting one?
+  \item Why must rebasing change commit hashes?
+  \item What is the difference between \co{HEAD\textasciitilde 2} and \co{HEAD\^{}2}?
+  \item Where does a file's \emph{name} live: blob, tree, or commit?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 10, \emph{Trust}, on signing commits so people can prove you
+wrote them, tagging releases, and what to do the day someone commits a password.
+
+\end{document}

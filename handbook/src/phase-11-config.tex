@@ -1,0 +1,330 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{11}
+\phasetitle{Configuration and automation}
+\phasesubtitle{Aliases, attributes, and hooks that stop a bad commit before it exists.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 11: Configuration and automation},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{Four levels of config}
+
+Git reads settings from several files and the most specific wins.
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{2.6cm} L{4.4cm} X@{}}
+\toprule
+\rhtablehead{Level} & \rhtablehead{File} & \rhtablehead{Applies to} \\
+\midrule
+\co{-{}-system} & \co{/etc/gitconfig} & Every user on the machine \\
+\co{-{}-global} & \co{\textasciitilde/.gitconfig} & You, everywhere \\
+\co{-{}-local} & \co{.git/config} & One repository \\
+\co{-{}-worktree} & \co{.git/config.worktree} & One worktree \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{shell}
+git config --list --show-origin
+git config --get user.email
+git config --global --edit
+\end{shell}
+
+\co{--show-origin} is the one to remember. When a setting is not doing what you
+expect, it tells you which file it came from, and the answer is usually a
+\co{--local} value you set months ago and forgot.
+
+\subsection{Different identities for different work}
+
+Personal projects under one email, university work under another:
+
+\begin{terminal}
+[includeIf "gitdir:~/work/"]
+    path = ~/.gitconfig-work
+\end{terminal}
+
+Put that in \co{~/.gitconfig}, put the work identity in \co{~/.gitconfig-work}, and
+git switches automatically based on where the repository lives. The trailing slash
+matters.
+
+\section{Settings worth turning on}
+
+\begin{shell}
+git config --global init.defaultBranch main
+git config --global pull.rebase true
+git config --global fetch.prune true
+git config --global rebase.autoSquash true
+git config --global rerere.enabled true
+git config --global merge.conflictStyle zdiff3
+git config --global diff.algorithm histogram
+git config --global push.autoSetupRemote true
+git config --global column.ui auto
+git config --global help.autocorrect 20
+\end{shell}
+
+Three of those deserve a note.
+
+\co{push.autoSetupRemote} means \co{git push} works on a brand new branch without
+\co{-u origin <name>}. It removes one of the most common small frictions in daily
+use.
+
+\co{diff.algorithm histogram} produces noticeably better diffs on code that has been
+moved or re-indented, at no real cost.
+
+\co{help.autocorrect 20} makes git run the obvious correction after two seconds when
+you typo a command. Set it to \co{0} if you find that alarming rather than helpful.
+
+\subsection{Line endings}
+
+The classic cross-platform problem: Windows uses CRLF, everything else uses LF, and
+without configuration every file shows as entirely modified when the other person
+touches it.
+
+\begin{shell}
+git config --global core.autocrlf true
+git config --global core.autocrlf input
+\end{shell}
+
+\co{true} on Windows, \co{input} on macOS and Linux.
+
+\begin{note}
+Better still, do not rely on each person configuring it. Put a \co{.gitattributes}
+file in the repository with \co{* text=auto eol=lf} and the rule travels with the
+project, applying to everyone regardless of their settings. This repository does
+exactly that.
+\end{note}
+
+\section{Aliases}
+
+\begin{shell}
+git config --global alias.st status
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.lg "log --graph --oneline --decorate --all"
+git config --global alias.last "log -1 HEAD --stat"
+git config --global alias.unstage "restore --staged"
+git config --global alias.amend "commit --amend --no-edit"
+\end{shell}
+
+Aliases starting with \co{!} run a shell command instead, from the repository root:
+
+\begin{shell}
+git config --global alias.root "!pwd"
+git config --global alias.cleanup "!git branch --merged main | grep -v main | xargs -r git branch -d"
+git config --global alias.sync "!git fetch --prune && git pull --rebase"
+\end{shell}
+
+That \co{cleanup} one deletes every local branch already merged into \co{main},
+which after an active month is most of them. Read it before you run it, which is
+good advice for any alias you copy from a document.
+
+\begin{tryit}
+Add this one and use it for a week:
+
+\begin{shell}
+git config --global alias.wip "!git add -A && git commit -m 'wip: save point'"
+\end{shell}
+
+A single word that snapshots everything before you try something risky. Phase 4
+explains why this makes you recoverable, and Phase 5 explains how to squash the
+\co{wip} commits away before anyone sees them.
+\end{tryit}
+
+\section{Ignoring files}
+
+\subsection{Precedence}
+
+Git checks several sources, most specific first:
+
+\begin{enumerate}
+  \item \co{.gitignore} in the same directory, then each parent directory
+  \item \co{.git/info/exclude}, local to your clone and never committed
+  \item The file named by \co{core.excludesFile}, your global ignore
+\end{enumerate}
+
+\subsection{Patterns}
+
+\begin{terminal}
+*.log              all .log files, any directory
+build/             a directory anywhere
+/build             build only at the repository root
+!important.log     re-include something a previous rule excluded
+doc/**/*.pdf       PDFs at any depth under doc/
+temp?.txt          temp1.txt, tempA.txt
+\end{terminal}
+
+\begin{trap}
+\co{.gitignore} only affects \textbf{untracked} files. Once a file is tracked, git
+keeps tracking it no matter what you add to the ignore list. This is the single most
+common confusion with the feature.
+
+To stop tracking a file while keeping it on disk:
+
+\begin{shell}
+git rm --cached config.local.json
+git commit -m "Stop tracking local config"
+\end{shell}
+
+The \co{--cached} is essential. Without it, \co{git rm} deletes the file.
+\end{trap}
+
+\subsection{A global ignore}
+
+Editor and OS clutter belongs in your global ignore, not in every project's
+\co{.gitignore}. Nobody else should have to accommodate your editor.
+
+\begin{shell}
+git config --global core.excludesFile ~/.gitignore_global
+\end{shell}
+
+Put \co{.DS\_Store}, \co{Thumbs.db}, \co{.idea/}, \co{*.swp} in there.
+
+\section{gitattributes}
+
+\co{.gitignore} decides which files git sees. \co{.gitattributes} decides how git
+treats them. It is committed, so it applies to everyone.
+
+\begin{terminal}
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+*.md diff=markdown
+*.py diff=python
+package-lock.json linguist-generated=true
+CHANGELOG.md merge=union
+docs/ export-ignore
+*.psd filter=lfs diff=lfs merge=lfs -text
+\end{terminal}
+
+Three of those are worth explaining.
+
+\co{diff=python} tells git the language, so diff hunk headers show the enclosing
+function name instead of a meaningless nearby line. Small change, and it makes
+reviewing much easier.
+
+\co{linguist-generated=true} collapses generated files in GitHub's diff view and
+excludes them from the language statistics. Lock files are the usual case.
+
+\co{merge=union} on a changelog makes git keep \emph{both} sides of a conflict
+automatically instead of stopping. For an append-only list of lines this is usually
+right, and it would have removed the conflicts from Phase 3, which is exactly why we
+did not use it there.
+
+\section{Hooks}
+
+Scripts git runs at specific moments. They live in \co{.git/hooks} and there are
+samples there already.
+
+\begin{shell}
+ls .git/hooks
+\end{shell}
+
+Remove the \co{.sample} suffix and make it executable to enable one.
+
+\subsection{The useful client-side hooks}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{3.4cm} X@{}}
+\toprule
+\rhtablehead{Hook} & \rhtablehead{Runs} \\
+\midrule
+\co{pre-commit} & Before the message is written. Exit non-zero to cancel. Linting
+and secret scanning go here. \\
+\co{prepare-commit-msg} & Before the editor opens. Use it to insert a template or a
+ticket number. \\
+\co{commit-msg} & After the message is written. Enforce a format. \\
+\co{pre-push} & Before a push. Run the test suite here, not in \co{pre-commit}. \\
+\co{post-checkout} & After switching branches. Reinstall dependencies. \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+A \co{pre-commit} hook that blocks obvious secrets:
+
+\begin{terminal}
+#!/bin/sh
+if git diff --cached | grep -nE "(api[_-]?key|secret|password|BEGIN.*PRIVATE KEY)"; then
+  echo "Possible secret in staged changes. Commit blocked."
+  echo "If this is a false positive: git commit --no-verify"
+  exit 1
+fi
+\end{terminal}
+
+\begin{trap}
+Hooks live in \co{.git/hooks}, which is not part of the repository and does not get
+cloned. A hook you write protects you and nobody else.
+
+Two ways round it. Point git at a directory that \emph{is} committed:
+
+\begin{shell}
+git config core.hooksPath .githooks
+\end{shell}
+
+Or use a framework that installs them on \co{npm install} or equivalent: Husky for
+JavaScript, \co{pre-commit} for Python and general use.
+
+Also remember \co{--no-verify} skips every hook. Hooks are a convenience that catches
+mistakes, never a security control. Anything that genuinely must hold has to run in
+CI, where the contributor cannot skip it. Phase 14 covers that.
+\end{trap}
+
+\subsection{Commit message conventions}
+
+Conventional Commits is the widely used format:
+
+\begin{terminal}
+feat(parser): support blank lines in sonnets
+fix: correct off-by-one in line counter
+docs: explain the force-with-lease difference
+refactor!: drop support for the old config format
+\end{terminal}
+
+The prefix is machine readable, which is the point: tools derive the next version
+number and generate a changelog from it. \co{feat} bumps MINOR, \co{fix} bumps
+PATCH, and \co{!} or a \co{BREAKING CHANGE:} footer bumps MAJOR.
+
+Enforce it in \co{commit-msg} if your team wants it. Consider whether you want it
+first, because on a small project it can be ceremony without benefit.
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Goal} & \rhtablehead{Command} \\
+\midrule
+Where did this setting come from? & \co{git config -{}-list -{}-show-origin} \\
+Different identity per directory & \co{includeIf "gitdir:\textasciitilde/work/"} \\
+Push a new branch with no flags & \co{git config -{}-global push.autoSetupRemote true} \\
+Make an alias & \co{git config -{}-global alias.lg "log -{}-graph ..."} \\
+Alias that runs a shell command & prefix the value with \co{!} \\
+Stop tracking a committed file & \co{git rm -{}-cached <file>} \\
+Ignore editor clutter everywhere & \co{git config -{}-global core.excludesFile ...} \\
+Share hooks with the team & \co{git config core.hooksPath .githooks} \\
+Skip hooks once & \co{git commit -{}-no-verify} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item Four config levels. Which wins?
+  \item You added \co{config.json} to \co{.gitignore} and git still tracks it. Why?
+  \item What does \co{.gitattributes} do that \co{.gitignore} cannot?
+  \item Why can a \co{pre-commit} hook never be a security control?
+  \item Which hook should run your test suite, and why not \co{pre-commit}?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 12, \emph{GitHub as a platform}, which leaves git behind
+entirely and covers the things GitHub added on top: issues, projects, pages, and a
+search syntax worth learning properly.
+
+\end{document}

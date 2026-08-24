@@ -1,0 +1,396 @@
+\documentclass[11pt]{article}
+\usepackage{rabbithole}
+
+\phasenumber{6}
+\phasetitle{Forensics}
+\phasesubtitle{Reading history: finding the commit that broke it, and the person who knows why.}
+
+\hypersetup{pdftitle={Rabbit Holes, Phase 6: Forensics},
+            pdfauthor={Accelerate, Manipal University Jaipur},
+            pdfsubject={git and GitHub handbook}}
+
+\begin{document}
+\maketitlepage
+
+\section{History is a database}
+
+Most people treat \co{git log} as a list they scroll past. It is closer to a
+queryable record of every change anyone made to anything, with timestamps and
+authorship, and git ships with a genuinely good query language for it.
+
+The situations this phase is for:
+
+\begin{itemize}
+  \item The tests passed last week and fail now, and nobody knows what changed.
+  \item There is a line of code that makes no sense and you need to know why it is
+    there before deleting it.
+  \item A function used to exist and now does not, and you want it back.
+  \item You need to know who to ask.
+\end{itemize}
+
+Every one of these has a direct answer, and most people answer them by guessing.
+
+\section{Reading the log properly}
+
+The default \co{git log} is verbose and hard to skim. These are worth learning.
+
+\begin{shell}
+git log --oneline --graph --all --decorate
+\end{shell}
+
+The single most useful invocation. \co{--graph} draws the branch structure in ASCII,
+\co{--all} includes every branch rather than just the current one, and
+\co{--decorate} labels branches and tags. This is how you see the actual shape of a
+repository.
+
+\subsection{Filtering}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.4cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{Shows} \\
+\midrule
+\co{git log -{}-since="2 weeks ago"} & Recent commits, dates are flexible \\
+\co{git log -{}-until="2026-08-01"} & Commits before a date \\
+\co{git log -{}-author="Shashwat"} & One person's commits \\
+\co{git log -{}-grep="conflict"} & Commits whose \emph{message} matches \\
+\co{git log -- path/to/file} & Commits that touched one file \\
+\co{git log -{}-follow -- file} & Same, but across renames \\
+\co{git log -n 20} & The last twenty \\
+\co{git log main..feature} & On \co{feature} but not \co{main} \\
+\co{git log feature..main} & On \co{main} but not \co{feature} \\
+\co{git log -{}-merges} & Only merge commits \\
+\co{git log -{}-no-merges} & Everything except merge commits \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+The \co{main..feature} form is worth pausing on. It means ``reachable from
+\co{feature}, not reachable from \co{main}'', which in practice is exactly ``what is
+in this pull request''. Reviewers use it constantly.
+
+\subsection{The pickaxe}
+
+This is the one almost nobody knows and it is remarkable.
+
+\begin{shell}
+git log -S "calculateTotal"
+\end{shell}
+
+This finds every commit that \textbf{changed the number of times} that string
+appears. Not commits mentioning it in the message, and not commits whose diff merely
+touches a line near it. Commits that added or removed it.
+
+Which means: if a function exists and you want the commit that created it, this
+finds it in one command, even if it was created eight years ago and has been moved
+between four files since.
+
+\begin{shell}
+git log -G "def parse_.*line"
+\end{shell}
+
+\co{-G} is the same idea with a regular expression, matching any diff line that
+changed.
+
+\begin{tryit}
+Something used to work and now does not, and you know a keyword.
+
+\begin{shell}
+git log -S "MAX_RETRIES" --oneline
+git show <the-sha-that-looks-relevant>
+\end{shell}
+
+Two commands, and you are looking at the exact change that introduced or removed the
+thing. Compare that to scrolling a year of history by hand.
+\end{tryit}
+
+\subsection{Custom formats}
+
+\begin{shell}
+git log --pretty=format:"%h %ad %an %s" --date=short
+\end{shell}
+
+\co{\%h} short hash, \co{\%ad} author date, \co{\%an} author name, \co{\%s} subject.
+There are around forty of these placeholders in \co{git help log}.
+
+Save one you like as an alias:
+
+\begin{shell}
+git config --global alias.lg "log --graph --oneline --decorate --all"
+\end{shell}
+
+Now \co{git lg} works everywhere. Phase 11 goes further into aliases.
+
+\subsection{Who has been working on what}
+
+\begin{shell}
+git shortlog -sn
+\end{shell}
+
+Commit counts per author, sorted. Add \co{--no-merges} for a fairer picture.
+
+\begin{note}
+Commit count is a bad measure of contribution and gets used as one depressingly
+often. Someone who spends three days finding a one-line fix has done more valuable
+work than someone who made forty commits renaming variables. Use it to find out
+\emph{who knows this area}, which is a real question, not to rank people.
+\end{note}
+
+\section{Diff properly}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.4cm} X@{}}
+\toprule
+\rhtablehead{Command} & \rhtablehead{Compares} \\
+\midrule
+\co{git diff} & Working directory against the index \\
+\co{git diff -{}-staged} & Index against \co{HEAD} \\
+\co{git diff HEAD} & Working directory against \co{HEAD} \\
+\co{git diff main feature} & Two branches, tip to tip \\
+\co{git diff main...feature} & \co{feature} against the point it diverged \\
+\co{git diff HEAD\textasciitilde 3 HEAD} & Across the last three commits \\
+\co{git diff -{}-stat} & Summary only, files and line counts \\
+\co{git diff -{}-word-diff} & Highlights changed words, not whole lines \\
+\co{git diff -{}-check} & Flags whitespace errors \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{trap}
+Two dots and three dots mean different things, and the difference matters when you
+are reviewing.
+
+\co{git diff main feature} compares the two current tips. If \co{main} has moved
+ahead since you branched, the output includes other people's changes as though they
+were yours.
+
+\co{git diff main...feature} compares \co{feature} against the commit where the two
+branches last agreed. That is what your branch actually changed, and it is what
+GitHub shows in a pull request.
+
+When reviewing, you almost always want three dots.
+\end{trap}
+
+\co{--word-diff} deserves a mention of its own. For prose, which this workshop has
+plenty of, a normal diff marks the whole line as changed when you altered one word.
+\co{--word-diff} shows you the word.
+
+\section{Blame}
+
+\begin{shell}
+git blame sonnet.md
+\end{shell}
+
+Every line, annotated with the commit, author and date that last touched it.
+
+The useful flags:
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{5.6cm} X@{}}
+\toprule
+\rhtablehead{Flag} & \rhtablehead{Effect} \\
+\midrule
+\co{-L 40,60} & Only lines 40 to 60 \\
+\co{-w} & Ignore whitespace-only changes \\
+\co{-C} & Detect lines moved from another file \\
+\co{-M} & Detect lines moved within the file \\
+\co{-{}-since=1.year} & Stop looking further back \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\begin{trap}
+Blame's biggest weakness is that it shows the \emph{most recent} change to a line.
+Someone reformatted the file in 2024, so every line is attributed to them and the
+actual history is buried.
+
+\co{-w} and \co{-M} and \co{-C} help. So does \co{.git-blame-ignore-revs}, a file
+listing commits that blame should look straight through:
+
+\begin{shell}
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+\end{shell}
+
+Put the SHA of your big reformat commit in that file, commit it, and blame skips
+past it forever. GitHub's web blame respects it too.
+\end{trap}
+
+\begin{why}
+The command is called blame and the name is unfortunate, because the useful question
+is never ``whose fault is this''. It is ``what was the author trying to do''.
+
+Blame gives you a commit, the commit gives you a message and a pull request, and the
+pull request gives you the discussion where somebody explained the constraint that
+makes the strange line necessary. That chain is why commit messages matter. A line
+of code tells you what, and only the history can tell you why.
+\end{why}
+
+\section{Bisect}
+
+The best tool in git that most people never touch.
+
+You know it worked at some point and is broken now, with two hundred commits in
+between. Bisect does a binary search: it checks out a commit halfway between good
+and bad, you say which it is, and it halves the range again. Two hundred commits
+takes about eight steps.
+
+\begin{shell}
+git bisect start
+git bisect bad
+git bisect good v1.2.0
+\end{shell}
+
+Git checks out a commit in the middle. Test it, then tell git:
+
+\begin{shell}
+git bisect good
+\end{shell}
+
+or
+
+\begin{shell}
+git bisect bad
+\end{shell}
+
+Repeat. After a handful of rounds:
+
+\begin{terminal}
+8e1f4a7c9d2b3a5f6e8d1c4b7a9f2e3d5c6b8a1f is the first bad commit
+Author: Someone <someone@example.com>
+Date:   Tue Aug 11 14:22:03 2026 +0530
+
+    Refactor the line counter
+\end{terminal}
+
+Then:
+
+\begin{shell}
+git bisect reset
+\end{shell}
+
+to return to where you started.
+
+\subsection{Automatic bisect}
+
+This is the part that makes it exceptional. If you can write a command that exits
+zero for good and non-zero for bad, git will do the whole search unattended.
+
+\begin{shell}
+git bisect start HEAD v1.2.0
+git bisect run pytest tests/test_parser.py
+\end{shell}
+
+Git checks out commits, runs your tests, interprets the exit code, and prints the
+guilty commit. You can go and do something else.
+
+Any command works:
+
+\begin{shell}
+git bisect run make test
+git bisect run ./check.sh
+git bisect run grep -q "expected string" output.txt
+\end{shell}
+
+\begin{note}
+Exit code 125 means ``cannot test this commit'', and git will skip it rather than
+counting it as good or bad. Useful when some commits in the range do not build at
+all. \co{git bisect skip} does the same thing by hand.
+\end{note}
+
+\begin{deeper}
+Bisect is the strongest argument for the commit hygiene in Phase 5. Its accuracy is
+bounded by your commit granularity: if each commit is a self-contained change that
+builds and passes, bisect lands on the exact line. If your history is forty commits
+called \co{wip} and half of them do not compile, bisect gives you a range and a
+shrug.
+
+Every tidy commit you make is a future afternoon you do not spend debugging.
+\end{deeper}
+
+\section{Finding things that are gone}
+
+\subsection{Search the current tree}
+
+\begin{shell}
+git grep "parse_line"
+git grep -n "TODO"
+git grep -i "shakespeare"
+\end{shell}
+
+Faster than \co{grep -r} because it only looks at tracked files, skipping
+\co{node\_modules} and build output automatically.
+
+\subsection{Search an old version}
+
+\begin{shell}
+git grep "parse_line" v1.2.0
+git grep "parse_line" HEAD~50
+\end{shell}
+
+\subsection{Search every commit ever}
+
+\begin{shell}
+git grep "the_thing" $(git rev-list --all)
+\end{shell}
+
+Slow on a large repository, and it will find text in a version of a file that was
+deleted years ago.
+
+\subsection{Recover a deleted file}
+
+Find the commit that removed it:
+
+\begin{shell}
+git log --diff-filter=D --oneline -- path/to/file.py
+\end{shell}
+
+\co{--diff-filter=D} means ``only commits that Deleted this path''. Then bring it
+back from the commit \emph{before} that one:
+
+\begin{shell}
+git checkout <sha>~1 -- path/to/file.py
+\end{shell}
+
+The file is restored and staged. \co{A} for added, \co{M} for modified and \co{R}
+for renamed work the same way.
+
+\section{Reference}
+
+\vspace{0.5em}
+\begin{tabularx}{\linewidth}{@{}L{6.6cm} X@{}}
+\toprule
+\rhtablehead{Question} & \rhtablehead{Command} \\
+\midrule
+What does this repo look like? & \co{git log -{}-oneline -{}-graph -{}-all} \\
+What is in this branch but not main? & \co{git log main..feature} \\
+Which commit introduced this string? & \co{git log -S "string"} \\
+What changed in this PR? & \co{git diff main...feature} \\
+Who wrote this line and why? & \co{git blame -w -M file} \\
+Which commit broke it? & \co{git bisect run <test>} \\
+Where is this text right now? & \co{git grep "text"} \\
+Which commit deleted this file? & \co{git log -{}-diff-filter=D -- <path>} \\
+Get a deleted file back & \co{git checkout <sha>\textasciitilde 1 -- <path>} \\
+Who knows this part of the code? & \co{git shortlog -sn -- <path>} \\
+\bottomrule
+\end{tabularx}
+\vspace{0.5em}
+
+\checkyourself{
+\begin{enumerate}
+  \item What is the difference between \co{git log -{}-grep} and \co{git log -S}?
+  \item Why does a reviewer want \co{main...feature} rather than \co{main feature}?
+  \item Blame says one person wrote every line, because they reformatted the file.
+    What fixes that?
+  \item Write the two commands that find a build break across 200 commits without
+    you testing anything by hand.
+  \item A file was deleted six months ago. How do you get it back?
+\end{enumerate}}
+
+\vspace{1em}
+{\color{rhborder}\rule{\linewidth}{0.8pt}}
+
+\textbf{Next:} Phase 7, \emph{Merging deeply}, which goes past the conflict you
+resolved in the workshop into merge strategies, why some merges create a commit and
+others do not, and how to make git remember a resolution so you never redo it.
+
+\end{document}
