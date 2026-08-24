@@ -870,7 +870,7 @@ behanchod
 behenchod
 behnchod
 benchod
-# short forms and common misspellings caught by test_ai.py
+# short forms and common misspellings caught by test_filter.py
 bhencho
 behncho
 behenchoo

@@ -194,19 +194,22 @@ of common vocabulary on every change and must never touch any of it.
 ### Testing
 
 ```bash
-python filter.py
+python test_filter.py
 ```
 
-Shows what the dictionary does with a set of sample inputs, and how long it takes.
+The one to run. Checks the dictionary against 250 labelled cases in
+`test_cases.txt`, then checks it does not touch ordinary vocabulary. Takes a
+fraction of a second, needs nothing installed, and exits non-zero if anything is
+wrong, so it works in CI.
+
+Add your own cases to `test_cases.txt`. The format is `[block:name]` and
+`[allow:name]` headings with words underneath.
 
 ```bash
-python test_ai.py
+python test_filter.py --ai
 ```
 
-Runs the model against the 250-word labelled set and reports how many it got wrong
-in each direction. Only relevant if you are changing `expand.py`. Takes about ten
-minutes, because the model is slow, which is the entire reason it is not in the
-live path.
+Also measures the model. Slow, and only relevant if you are changing `expand.py`.
 
 ---
 
@@ -242,5 +245,6 @@ lives on the server, so nothing is lost.
 | `wordlist.txt` | The terms to block, and the ordinary words to protect. |
 | `safe_words.txt` | Vocabulary used by the collision check. Not used at runtime. |
 | `expand.py` | Grows the dictionary before a session, using a model, with your approval. |
-| `test_ai.py` | Measures how accurate that model actually is. |
+| `test_filter.py` | Tests the filter. Run this after any change to the dictionary. |
+| `test_cases.txt` | The labelled cases it tests against. |
 | `static/index.html` | The whole page. No build step, no dependencies. |

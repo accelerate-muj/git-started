@@ -75,6 +75,7 @@ class Room:
     def __init__(self, cooldown: float):
         self.words: list[Word] = []
         self.clients: dict[WebSocket, str] = {}
+        self.hosts: set[WebSocket] = set()
         self.last_post: dict[str, float] = {}
         self.blocked_count = 0
         self.cooldown = cooldown
@@ -154,12 +155,21 @@ class Room:
 
     async def reject(self, ws: WebSocket, text: str, micros: int, tier: int = 1) -> None:
         self.blocked_count += 1
-        # Only the sender is told what was rejected. Everyone else sees the counter
-        # move, which keeps the filter part of the game without putting the word on
-        # the projector.
+        name = self.clients.get(ws, "someone")
+
+        # The sender is told, and nobody else in the room is. Everyone just sees
+        # the counter move, which keeps the filter part of the game without
+        # putting the word up on the projector.
         await self.send(ws, {"type": "rejected", "word": text,
                              "reason": "Not that one.", "micros": micros, "tier": tier})
         await self.broadcast({"type": "blocked_count", "blocked": self.blocked_count})
+
+        # The host does see it. During a session that is how you notice one person
+        # repeatedly trying it on. It is also the only way to demonstrate that the
+        # filter is doing anything at all, since by design the evidence is invisible.
+        for host in list(self.hosts):
+            await self.send(host, {"type": "caught", "word": text,
+                                   "author": name, "micros": micros})
 
     async def publish(self, name: str, text: str, micros: int,
                       flagged: bool = False) -> Word | None:
@@ -235,6 +245,8 @@ def make_app(room: Room, host_key: str) -> FastAPI:
                     name = proposed
                     is_host = msg.get("key") == host_key
                     room.clients[ws] = name
+                    if is_host:
+                        room.hosts.add(ws)
                     await room.send(ws, {**room.snapshot(), "you": name,
                                          "isHost": is_host})
                     await room.broadcast_presence()
@@ -256,6 +268,7 @@ def make_app(room: Room, host_key: str) -> FastAPI:
             pass
         finally:
             room.clients.pop(ws, None)
+            room.hosts.discard(ws)
             if name:
                 await room.broadcast_presence()
 
