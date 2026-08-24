@@ -1,25 +1,36 @@
 """
-The gate for Chaos Draft.
+The three-tier gate for Chaos Draft.
 
-Design note, because the shape of this is not obvious and was not the first plan.
+    Tier 1  DICTIONARY   microseconds, deterministic, catches the known set
+    Tier 2  AI           seconds, catches novel spellings the dictionary misses
+    Tier 3  HUMAN        the host, who catches what both of the above missed
 
-The original idea was to ask a local language model whether each word was
-acceptable. That was measured before it was built, on gemma3:1b through ollama, and
-it failed on both axes at once:
+A word takes one of four routes through tier 1:
 
-    ~2500 ms per word          far too slow to sit in front of a keystroke
-    missed "behenchod"         one of the worst words, waved straight through
-    missed "randi"             same
-    blocked "kutta"            which just means dog
-    blocked "saala"            which is mild and extremely common
+    in [allow]           -> ALLOW immediately, tiers 2 and 3 never see it
+    in [exact]/[contains]-> BLOCK immediately, nothing else runs
+    near a blocked term  -> REVIEW, hand to tier 2, and to tier 3 if 2 is unsure
+    nothing matched      -> ALLOW
 
-So the model is not the gate. A normalised set lookup is the gate, and it answers in
-microseconds with no network, no GPU, and no surprises. The model is available as an
-optional second opinion that runs *after* a word is already live, and can retract it
-a moment later. See audit() at the bottom.
+The REVIEW route is the important one and it is why this is not just a wordlist.
+Someone typing "chutlya" or "madrchod" is obviously trying it on, but neither is a
+dictionary entry and normalisation alone will not save you. Bounded edit distance
+catches them and routes them to the slower, smarter tiers.
 
-The interesting part here is normalisation: turning "ch00t-i-y-aaaa" into "chutiya"
-before looking it up, so the blocklist holds one entry instead of forty.
+WHY THE AI IS TIER 2 AND NOT TIER 1
+-----------------------------------
+Measured on this machine before any of this was built. gemma3:1b, single-word
+classification, which is the easiest thing it could possibly be asked:
+
+    ~2500 ms per word          against a "minimum latency" requirement
+    allowed "behenchod"        one of the worst words in the language
+    allowed "randi"            likewise
+    blocked "kutta"            which means dog
+    blocked "saala"            mild, common, fine in a story
+
+It is too slow to gate a keystroke and too unreliable to trust alone. It is
+genuinely useful for the narrow job of second-guessing a handful of suspicious
+words per session, which is exactly what tier 2 is.
 """
 from __future__ import annotations
 
@@ -27,11 +38,11 @@ import re
 import time
 import unicodedata
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 WORDLIST = Path(__file__).parent / "wordlist.txt"
 
-# Characters people substitute to slip past a filter.
 LEET = str.maketrans({
     "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", "9": "g",
     "@": "a", "$": "s", "!": "i", "|": "i", "+": "t", "(": "c", "€": "e", "£": "l",
@@ -43,60 +54,96 @@ RUN_3_PLUS = re.compile(r"(.)\1{2,}")
 ANY_RUN = re.compile(r"(.)\1+")
 
 # Romanised Hindi has no single spelling. The same word is written "chutiya" and
-# "chootiya", "randi" and "raandi", "bhosdi" and "bhosadi", depending on whether the
-# writer is spelling the vowel long. Folding these means the blocklist carries one
-# spelling instead of every combination.
-#
-# This is applied to the blocklist as well as to input, so both sides land on the
-# same form. "ck" -> "k" and "ph" -> "f" catch the same trick in English.
+# "chootiya", "randi" and "raandi". Folding these lets the dictionary carry one
+# spelling instead of every combination. Applied to both sides so they meet.
 TRANSLITERATION = (
     ("oo", "u"), ("ee", "i"), ("aa", "a"), ("ii", "i"), ("uu", "u"),
     ("ph", "f"), ("ck", "k"), ("kh", "k"), ("gh", "g"),
 )
 
-# Ordinary words that contain a blocked substring, or that collapse onto one after
-# normalisation. Checked first, so they can never be blocked.
+# Edit-distance thresholds for the REVIEW route. Short words are excluded because
+# almost everything is one edit away from a four-letter word.
+FUZZY_MIN_LEN = 6
+FUZZY_LONG_LEN = 9
+
+# The aggressive normalisation variants are lossy, and on short words they collide
+# with ordinary vocabulary. Two real collisions found by the audit below:
 #
-# "chudail" is the important one for a story-writing game: it means witch or ghost,
-# it is a perfectly normal Hindi word, and it contains a root we block.
-ALLOWLIST = {
-    "chudail", "chudails", "class", "classes", "classic", "pass", "passed", "passes",
-    "password", "grass", "bass", "mass", "massive", "glass", "brass", "compass",
-    "assess", "assessment", "asset", "assets", "assign", "assist", "associate",
-    "assume", "assure", "embassy", "harass", "cassette", "canvass", "assassin",
-    "cocktail", "cockpit", "peacock", "cockroach", "hancock", "shiitake",
-    "analysis", "analyse", "analyze", "titan", "titanic", "title", "titles",
-    "dickens", "dickinson", "scunthorpe", "penistone", "sussex", "essex",
-    "kuttab", "saal", "saalon", "gandhi", "gandhian", "ganda", "gandak",
-    "lauki", "laudable", "laurel", "chotu", "chota", "choti", "chhota",
-    "bhola", "bhalu", "gaana", "gaanaa", "gaon", "haram", "harmony",
-    "matter", "butter", "shutter", "shirt", "shift", "sheet", "shot",
-    "hitch", "ditch", "witch", "pitch", "batch", "watch",
-}
+#   "aand" folds aa -> a  and becomes "and"
+#   "ass"  flattens ss -> s and becomes "as"
+#
+# Blocking "and" and "as" would have destroyed the activity in about four seconds.
+# So only the base form of a term is ever stored short; lossy variants have to be
+# at least this long to be trusted. Run `python filter.py --collisions` to re-check.
+MIN_VARIANT_LEN = 4
+
+
+def indexable(word: str) -> list[str]:
+    """
+    The forms of a word safe to put in, or match against, the BLOCK lists.
+
+    Always the base form, plus any lossy variant long enough not to collide with
+    ordinary words. The variants are what catch obfuscation, so blocking needs
+    them.
+    """
+    forms = normalise(word)
+    if not forms:
+        return []
+    return [forms[0]] + [f for f in forms[1:] if len(f) >= MIN_VARIANT_LEN]
+
+
+def allowable(word: str) -> list[str]:
+    """
+    The forms safe to put in, or match against, the ALLOW list. Base form only.
+
+    Lossy variants must never be allowlisted. A variant of an innocent word can
+    land exactly on a real swear word, and because the allowlist overrides
+    everything, that silently switches the swear word back on. A real example
+    caught by the test suite:
+
+        "sheet"  --(ee -> i)-->  "shit"
+
+    Allowlisting "sheet" was un-blocking "shit". Base forms only, always.
+    """
+    forms = normalise(word)
+    return forms[:1]
+
+
+class Decision(str, Enum):
+    ALLOW = "allow"
+    BLOCK = "block"
+    REVIEW = "review"
 
 
 @dataclass(frozen=True)
 class Verdict:
-    allowed: bool
+    decision: Decision
     word: str
+    tier: int = 1
     reason: str = ""
     matched: str = ""
     micros: int = 0
 
+    @property
+    def allowed(self) -> bool:
+        return self.decision is Decision.ALLOW
+
+
+# ---------------------------------------------------------------------------
+# Normalisation
+# ---------------------------------------------------------------------------
 
 def _strip_marks(s: str) -> str:
-    """Remove accents, leaving the base letters. Latin only."""
-    decomposed = unicodedata.normalize("NFKD", s)
-    return "".join(c for c in decomposed if not unicodedata.combining(c))
+    return "".join(c for c in unicodedata.normalize("NFKD", s)
+                   if not unicodedata.combining(c))
 
 
 def normalise(word: str) -> list[str]:
     """
-    Turn one raw word into every form worth checking.
+    Every form of one raw word that is worth checking.
 
-    Devanagari is handled separately and deliberately lightly: NFKD would pull the
-    matras off the consonants and turn the text into something that no longer
-    matches anything sensible.
+    Devanagari is handled separately and deliberately lightly. NFKD would pull the
+    matras off the consonants and the result would match nothing.
     """
     raw = word.strip().lower()
     if not raw:
@@ -105,25 +152,19 @@ def normalise(word: str) -> list[str]:
     if DEVANAGARI.search(raw):
         return [unicodedata.normalize("NFC", raw)]
 
-    base = _strip_marks(raw).translate(LEET)
-    base = NON_LETTER.sub("", base)
+    base = NON_LETTER.sub("", _strip_marks(raw).translate(LEET))
     if not base:
         return []
 
     forms = [base]
-    # "fuuuuck" -> "fuck". Runs of three or more are always deliberate stretching.
-    squashed = RUN_3_PLUS.sub(r"\1", base)
+    squashed = RUN_3_PLUS.sub(r"\1", base)          # fuuuuck -> fuck
     if squashed != base:
         forms.append(squashed)
-    # Every run to a single letter. Catches "aasss" but also flattens real doubles,
-    # which is why ALLOWLIST is consulted before any of this runs.
-    flattened = ANY_RUN.sub(r"\1", base)
+    flattened = ANY_RUN.sub(r"\1", base)            # aasss -> as
     if flattened not in forms:
         forms.append(flattened)
 
-    # Long-vowel spellings: "ch00tiya" has already become "chootiya" above, and this
-    # is what turns it into "chutiya" so it matches the single blocklist entry.
-    for form in list(forms):
+    for form in list(forms):                        # chootiya -> chutiya
         folded = form
         for src, dst in TRANSLITERATION:
             folded = folded.replace(src, dst)
@@ -132,19 +173,56 @@ def normalise(word: str) -> list[str]:
     return forms
 
 
-class Filter:
-    """Loads the blocklist and answers in microseconds."""
+def _within(a: str, b: str, limit: int) -> bool:
+    """
+    Is the edit distance between a and b at most `limit`?
+
+    Bounded Levenshtein with early exit. Returns as soon as the best possible
+    remaining distance exceeds the limit, which makes the common case (not close
+    at all) cost almost nothing.
+    """
+    la, lb = len(a), len(b)
+    if abs(la - lb) > limit:
+        return False
+    if a == b:
+        return True
+
+    prev = list(range(lb + 1))
+    for i in range(1, la + 1):
+        cur = [i] + [0] * lb
+        lo = max(1, i - limit)
+        hi = min(lb, i + limit)
+        if lo > 1:
+            cur[lo - 1] = limit + 1
+        for j in range(lo, hi + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+        if hi < lb:
+            cur[hi + 1] = limit + 1
+        if min(cur[lo:hi + 1] or [limit + 1]) > limit:
+            return False
+        prev = cur
+    return prev[lb] <= limit
+
+
+# ---------------------------------------------------------------------------
+# Tier 1
+# ---------------------------------------------------------------------------
+
+class Dictionary:
+    """Tier 1. Loads wordlist.txt and answers in microseconds."""
 
     def __init__(self, path: Path = WORDLIST):
         self.path = path
+        self.allow: set[str] = set()
         self.exact: set[str] = set()
         self.contains: list[str] = []
+        self.fuzzy_targets: list[str] = []
         self._mtime = 0.0
         self.load()
 
     def load(self) -> None:
-        exact: set[str] = set()
-        contains: set[str] = set()
+        buckets: dict[str, set[str]] = {"allow": set(), "exact": set(), "contains": set()}
         section = "exact"
 
         text = self.path.read_text(encoding="utf-8") if self.path.exists() else ""
@@ -153,18 +231,34 @@ class Filter:
             if not line or line.startswith("#"):
                 continue
             if line.startswith("[") and line.endswith("]"):
-                section = line[1:-1].strip().lower()
+                name = line[1:-1].strip().lower()
+                if name in buckets:
+                    section = name
                 continue
-            for form in normalise(line):
-                (exact if section == "exact" else contains).add(form)
+            forms = allowable(line) if section == "allow" else indexable(line)
+            for form in forms:
+                buckets[section].add(form)
 
-        self.exact = exact
-        # Longest first, so the reported match is the most specific one.
-        self.contains = sorted(contains, key=len, reverse=True)
+        self.allow = buckets["allow"]
+        self.exact = buckets["exact"]
+        self.contains = sorted(buckets["contains"], key=len, reverse=True)
+
+        # Only reasonably long terms are worth fuzzy-matching against, and only
+        # Latin ones. Devanagari edit distance is not meaningful here.
+        #
+        # Each target is stored with its set of distinct characters. An edit
+        # distance of k changes at most 2k members of that set, so comparing the
+        # sets first rules out most candidates for the price of a set operation,
+        # which is far cheaper than running the distance function on all of them.
+        self.fuzzy_targets = [
+            (t, frozenset(t))
+            for t in sorted({t for t in (self.exact | set(self.contains))
+                             if len(t) >= FUZZY_MIN_LEN and not DEVANAGARI.search(t)},
+                            key=len)
+        ]
         self._mtime = self.path.stat().st_mtime if self.path.exists() else 0.0
 
     def reload_if_changed(self) -> bool:
-        """Pick up edits to wordlist.txt without restarting the server."""
         if not self.path.exists():
             return False
         if self.path.stat().st_mtime != self._mtime:
@@ -175,124 +269,268 @@ class Filter:
     def check(self, word: str) -> Verdict:
         start = time.perf_counter_ns()
 
-        def done(allowed: bool, reason: str = "", matched: str = "") -> Verdict:
-            return Verdict(
-                allowed=allowed,
-                word=word,
-                reason=reason,
-                matched=matched,
-                micros=(time.perf_counter_ns() - start) // 1000,
-            )
+        def out(decision: Decision, reason: str = "", matched: str = "") -> Verdict:
+            return Verdict(decision, word, 1, reason, matched,
+                           (time.perf_counter_ns() - start) // 1000)
 
         raw = word.strip().lower()
         if not raw:
-            return done(False, "empty")
-        if raw in ALLOWLIST:
-            return done(True, "allowlisted")
+            return out(Decision.BLOCK, "empty")
 
-        forms = normalise(word)
+        forms = indexable(word)
         if not forms:
-            return done(False, "no letters")
-        if forms[0] in ALLOWLIST:
-            return done(True, "allowlisted")
+            return out(Decision.BLOCK, "no letters")
+
+        # Allowlist wins over everything, including exact matches, so it is
+        # matched on base forms only. See allowable() for why.
+        if raw in self.allow or any(f in self.allow for f in allowable(word)):
+            return out(Decision.ALLOW, "allowlisted")
 
         for form in forms:
             if form in self.exact:
-                return done(False, "blocked", form)
+                return out(Decision.BLOCK, "dictionary", form)
 
         for form in forms:
             for root in self.contains:
                 if root in form:
-                    return done(False, "blocked", root)
+                    return out(Decision.BLOCK, "dictionary", root)
 
-        return done(True, "clean")
+        # Near miss. Deliberate misspellings land here.
+        probe = forms[0]
+        if len(probe) >= FUZZY_MIN_LEN:
+            limit = 2 if len(probe) >= FUZZY_LONG_LEN else 1
+            probe_chars = frozenset(probe)
+            budget = 2 * limit
+            for target, target_chars in self.fuzzy_targets:
+                if abs(len(target) - len(probe)) > limit:
+                    continue
+                if len(probe_chars ^ target_chars) > budget:
+                    continue
+                if _within(probe, target, limit):
+                    return out(Decision.REVIEW, "near a blocked word", target)
+
+        return out(Decision.ALLOW, "clean")
 
     def add(self, term: str, section: str = "exact") -> None:
-        """Append a term to the file and to memory. Used by the audit path."""
-        for form in normalise(term):
-            if section == "exact":
+        """Add a term permanently. Used by tiers 2 and 3."""
+        term = term.strip().lower()
+        if not term:
+            return
+        for form in indexable(term):
+            if section == "allow":
+                self.allow.add(form)
+            elif section == "exact":
                 self.exact.add(form)
             elif form not in self.contains:
                 self.contains.append(form)
                 self.contains.sort(key=len, reverse=True)
+        header = {"allow": "[allow]", "exact": "[exact]", "contains": "[contains]"}[section]
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(f"\n# added at runtime\n{term.strip().lower()}\n")
-        self._mtime = self.path.stat().st_mtime
+            f.write(f"\n# added during a session\n{header}\n{term}\n")
+        if self.path.exists():
+            self._mtime = self.path.stat().st_mtime
+        self.load()
 
 
 # ---------------------------------------------------------------------------
-# Optional second opinion.
+# Tier 2
 # ---------------------------------------------------------------------------
 
-async def audit(word: str, model: str = "gemma3:1b", timeout: float = 12.0) -> bool | None:
+# Few-shot beats zero-shot substantially on this task. The examples are chosen to
+# pin down the two things the model gets wrong unaided: it under-blocks romanised
+# Hindi abuse, and it over-blocks ordinary Hindi words that sound rude in English.
+_PROMPT = (
+    "You classify single words for a student chat filter. "
+    "Answer with exactly one word: BLOCK or ALLOW.\n\n"
+    "BLOCK = profanity, sexual abuse, or a slur, in ANY language. Romanised Hindi "
+    "abuse counts. Abbreviations of Hindi abuse count.\n"
+    "ALLOW = ordinary words, including mildly rude ones, and ordinary Hindi words.\n\n"
+    "Examples:\n"
+    "Word: behenchod\nAnswer: BLOCK\n"
+    "Word: madarchod\nAnswer: BLOCK\n"
+    "Word: randi\nAnswer: BLOCK\n"
+    "Word: bc\nAnswer: BLOCK\n"
+    "Word: chutiya\nAnswer: BLOCK\n"
+    "Word: fuck\nAnswer: BLOCK\n"
+    "Word: kutta\nAnswer: ALLOW\n"
+    "Word: saala\nAnswer: ALLOW\n"
+    "Word: chudail\nAnswer: ALLOW\n"
+    "Word: idiot\nAnswer: ALLOW\n"
+    "Word: river\nAnswer: ALLOW\n"
+    "Word: dost\nAnswer: ALLOW\n\n"
+    "Word: {word}\nAnswer:"
+)
+
+
+class Auditor:
     """
-    Ask a local ollama model whether a word that already passed should not have.
+    Tier 2. Asks a local ollama model about words tier 1 was unsure of.
 
-    Returns True to retract, False to leave alone, None if it could not be reached
-    or gave an answer that was not one of the two words it was asked for.
-
-    This runs AFTER the word is live, never before. On the measurements above it
-    takes seconds and misses obvious cases, so it is a supplement to the blocklist
-    and not a replacement for it. Its real value is that anything it does catch gets
-    written into wordlist.txt permanently, so the list improves during a session.
+    Every answer is cached, so a word is only ever paid for once. In a session
+    where the same few suspicious words get tried repeatedly, which is exactly what
+    happens when someone is poking at the filter, the cache does most of the work.
     """
-    import json
-    import aiohttp
 
-    prompt = (
-        "Answer with exactly one word: BLOCK or ALLOW.\n"
-        "BLOCK if this is profanity, a slur, or sexually abusive, in any language, "
-        "including Hindi, Hinglish and romanised Hindi.\n"
-        "ALLOW for ordinary words, including mildly rude ones like 'dog' or 'idiot', "
-        "and ordinary Hindi words like 'chudail' (witch).\n"
-        f"Word: {word}\nAnswer:"
-    )
-    body = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0, "num_predict": 4},
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "http://localhost:11434/api/generate",
-                json=body,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                data = json.loads(await resp.text())
-        answer = data.get("response", "").strip().upper()
-    except Exception:
+    # Measured on a 36-case labelled set, then confirmed on a much larger one.
+    # gemma4:e2b is the only local model that got this right: 35/36 with zero false
+    # positives. gemma3:1b few-shot managed 28/36 and over-blocked "dog" and
+    # "class", which in a story game is worse than missing something. Order matters,
+    # the first reachable model wins.
+    DEFAULT_MODELS = ("gemma4:e2b", "gemma4:e4b", "gemma3:1b")
+
+    # Models that emit reasoning tokens before answering. They need thinking turned
+    # off and a much larger budget, or they return an empty string.
+    THINKING = ("gemma4", "deepseek-r1", "qwen3")
+
+    def __init__(self, model: str | None = None, timeout: float = 25.0,
+                 url: str = "http://localhost:11434"):
+        self.models = (model,) if model else self.DEFAULT_MODELS
+        self.model = self.models[0]
+        self.timeout = timeout
+        self.url = url
+        self.cache: dict[str, bool | None] = {}
+        self.available: bool | None = None
+        self.calls = 0
+        self.cache_hits = 0
+
+    def _params(self, model: str) -> dict:
+        if any(model.startswith(t) for t in self.THINKING):
+            return {"think": False, "num_predict": 320}
+        return {"num_predict": 6}
+
+    async def check(self, word: str) -> bool | None:
+        """True to block, False to allow, None if the model could not be reached."""
+        key = (normalise(word) or [word])[0]
+        if key in self.cache:
+            self.cache_hits += 1
+            return self.cache[key]
+
+        import json
+        import aiohttp
+
+        params = self._params(self.model)
+        body = {
+            "model": self.model,
+            "prompt": _PROMPT.format(word=word),
+            "stream": False,
+            "options": {"temperature": 0, "num_predict": params["num_predict"]},
+        }
+        if "think" in params:
+            body["think"] = params["think"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.url}/api/generate", json=body,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                ) as resp:
+                    data = json.loads(await resp.text())
+            answer = data.get("response", "").strip().upper()
+            self.available = True
+        except Exception:
+            self.available = False
+            return None
+
+        self.calls += 1
+        if answer.startswith("BLOCK"):
+            result: bool | None = True
+        elif answer.startswith("ALLOW"):
+            result = False
+        else:
+            result = None
+        self.cache[key] = result
+        return result
+
+    async def ping(self) -> str | None:
+        """
+        Find the first reachable model and keep it. Called once at startup so the
+        host is told whether tier 2 is actually on, rather than discovering it is
+        not the first time somebody types something suspicious.
+        """
+        for candidate in self.models:
+            self.model = candidate
+            self.cache.pop("hello", None)
+            if await self.check("hello") is not None:
+                self.available = True
+                return candidate
+        self.available = False
+        self.model = self.models[0]
         return None
 
-    if answer.startswith("BLOCK"):
-        return True
-    if answer.startswith("ALLOW"):
-        return False
-    return None
+
+# Backwards-compatible name, since the earlier version of this file exported it.
+Filter = Dictionary
+
+
+def collision_audit(d: "Dictionary", path: Path | None = None) -> list[tuple[str, str, str]]:
+    """
+    Check the dictionary against a corpus of ordinary vocabulary.
+
+    Every word in safe_words.txt must come out ALLOW. Anything that does not is a
+    blocklist entry colliding with ordinary language, which is a far worse failure
+    than missing a swear word: it stops people writing the story.
+    """
+    path = path or (Path(__file__).parent / "safe_words.txt")
+    if not path.exists():
+        return []
+    words = [w for line in path.read_text(encoding="utf-8").splitlines()
+             if not line.strip().startswith("#")
+             for w in line.split()]
+    bad = []
+    for w in dict.fromkeys(words):
+        v = d.check(w)
+        if v.decision is not Decision.ALLOW:
+            bad.append((w, v.decision.value, v.matched))
+    return bad
 
 
 if __name__ == "__main__":
     import sys
 
-    # Windows consoles default to cp1252, which cannot print Devanagari.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    f = Filter()
-    print(f"{len(f.exact)} exact terms, {len(f.contains)} roots\n")
+    d = Dictionary()
+
+    if "--collisions" in sys.argv:
+        print(f"tier 1: {len(d.exact)} exact, {len(d.contains)} roots, "
+              f"{len(d.allow)} allowed\n")
+        bad = collision_audit(d)
+        corpus = Path(__file__).parent / "safe_words.txt"
+        total = len({w for line in corpus.read_text(encoding='utf-8').splitlines()
+                     if not line.strip().startswith('#') for w in line.split()})
+        if not bad:
+            print(f"  {total} ordinary words checked, no collisions.")
+            sys.exit(0)
+        print(f"  {total} checked, {len(bad)} COLLISIONS:\n")
+        for w, dec, m in bad:
+            print(f"    {w:18} -> {dec:6}  caused by entry {m!r}")
+        print("\n  Fix by removing the entry, or adding the word under [allow].")
+        sys.exit(1)
+    print(f"tier 1: {len(d.exact)} exact, {len(d.contains)} roots, "
+          f"{len(d.allow)} allowed, {len(d.fuzzy_targets)} fuzzy targets\n")
 
     tests = sys.argv[1:] or [
-        "sunshine", "chudail", "class", "kutta", "saala", "dream", "witch",
+        # should pass
+        "sunshine", "chudail", "class", "pass", "grass", "assassin", "kutta",
+        "saala", "dream", "witch", "bhoot", "ganda", "chutney", "gandhi",
+        # should block outright
         "behenchod", "b3h3nch0d", "b-e-h-e-n-c-h-o-d", "BEHENCHODDDD",
         "chutiya", "ch00tiya", "madarchod", "fuck", "f.u.c.k", "fuuuuck",
-        "ass", "pass", "grass", "assassin", "गांडू", "चूतिया",
+        "ass", "bc", "mc", "bkl", "randi", "gaandu", "chamar", "bhangi",
+        "गांडू", "चूतिया", "मादरचोद",
+        # should land in review
+        "chutlya", "madrchod", "behnchodd", "bhosdyke", "haramzda",
     ]
     worst = 0
+    counts = {Decision.ALLOW: 0, Decision.BLOCK: 0, Decision.REVIEW: 0}
     for t in tests:
-        v = f.check(t)
+        v = d.check(t)
         worst = max(worst, v.micros)
-        mark = "allow" if v.allowed else "BLOCK"
+        counts[v.decision] += 1
+        tag = {Decision.ALLOW: "allow", Decision.BLOCK: "BLOCK",
+               Decision.REVIEW: "review"}[v.decision]
         extra = f"  <- {v.matched}" if v.matched else ""
-        print(f"  {mark:5}  {t:24} {v.micros:5} us  {v.reason}{extra}")
-    print(f"\nslowest: {worst} us")
+        print(f"  {tag:6} {t:22} {v.micros:6} us  {v.reason}{extra}")
+    print(f"\n  {counts[Decision.ALLOW]} allowed, {counts[Decision.BLOCK]} blocked, "
+          f"{counts[Decision.REVIEW]} to review")
+    print(f"  slowest: {worst} us")

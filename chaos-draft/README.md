@@ -3,192 +3,184 @@
 The warm-up activity, run in the fifteen minutes before the git workshop starts.
 
 Everyone writes one story together. One word each, no turn order, as fast as they
-can type. It descends into nonsense almost immediately, which is the point. A bot
-reads every word before it reaches the page and quietly eats the ones that should
-not be there.
+can type. It falls apart almost immediately, which is the point.
 
-It runs on your laptop. Everyone joins over the room's wifi. Nothing leaves the
-network and there are no accounts.
+It runs on one laptop. Everyone joins over the room wifi. Nothing leaves the
+network and nobody makes an account.
+
+---
+
+## The activity
+
+1. The host starts the server and puts the address on the projector.
+2. Everyone opens it on a phone or laptop and types a name.
+3. Someone types the first word.
+4. Everybody else adds one word at a time, whenever they like.
+5. After ten minutes, read the result out loud.
+
+There is no turn order and no plan. Two people will try to steer the story in
+opposite directions at the same time, and that is the entire joke.
+
+A filter checks every word before it reaches the page and quietly drops anything
+inappropriate, in English and Hindi. Participants do not need to think about it.
+Everyone can see a counter of how many words it has dropped, but never which ones.
 
 ---
 
 ## Running it
 
 ```bash
-cd chaos-draft && python server.py
+cd chaos-draft
 ```
 
+```bash
+pip install -r requirements.txt
 ```
-  Chaos Draft
-  163 blocked terms, 38 roots
 
+```bash
+python server.py
+```
+
+The server prints two addresses:
+
+```
   Everyone opens:  http://192.168.1.42:8000
   You open:        http://192.168.1.42:8000/?key=host
 ```
 
-Put the first URL on the projector. Open the second one yourself, which gives you
-Undo and Reset buttons nobody else has.
+Put the first on the projector. Open the second yourself. It is the same page plus
+the host controls, which nobody else gets.
 
-Requirements: Python 3.9 or newer, and `pip install fastapi uvicorn`.
+Needs Python 3.9 or newer.
+
+### Host controls
+
+| Button | Does |
+|---|---|
+| **Copy story** | Puts the whole story on your clipboard. Also at `/story.txt`. |
+| **Undo** | Removes the last word. |
+| **Reset** | Clears everything and starts over. |
 
 ### Options
 
 ```bash
-python server.py --port 8080
 python server.py --cooldown 0
-python server.py --cooldown 2.5
-python server.py --host-key something-else
-python server.py --audit
 ```
 
-`--cooldown` is seconds each person must wait between words. It defaults to 1. Set
-it to `0` for genuine chaos, or raise it if two fast typists are drowning everyone
-else out.
+How many seconds each person waits between words. Defaults to 1. Set it to `0` for
+genuine chaos, or raise it if two fast typists are drowning everyone else out.
+
+```bash
+python server.py --port 8080
+```
+
+```bash
+python server.py --host-key something-else
+```
+
+Changes the secret in your host URL, if you would rather people did not guess it.
+
+```bash
+python server.py --ai
+```
+
+Turns on the second-opinion check described below. Off by default.
 
 ---
 
-## How the filter works, and why
+## How the filtering works
 
-Every word is checked before it goes anywhere. The check takes **single-digit
-microseconds**, so a word appears on thirty screens as fast as the wifi can carry
-it.
+Three layers, in order, so the fast one does almost all the work.
 
-The obvious design was to ask a small local language model whether each word was
-acceptable. That was measured first, on `gemma3:1b` through ollama, and it failed
-badly enough to throw out:
+**1. Dictionary.** A list of terms to block, in English, Hindi and several other
+Indian languages. Words are normalised before being looked up, so spacing,
+punctuation, number substitutions, stretched letters and alternative spellings all
+collapse onto the same entry. This answers in well under a millisecond and handles
+the overwhelming majority of cases.
+
+**2. AI.** For words that look close to a blocked term but are not an exact match,
+a small language model running locally on the same laptop gives a second opinion.
+This is slower, so it only ever sees the handful of borderline words in a session,
+never ordinary ones. Off by default, enable with `--ai`. It needs
+[ollama](https://ollama.com) running with a model pulled:
+
+```bash
+ollama pull gemma4:e2b
+```
+
+**3. You.** The host can remove any word that got through, at any time, with one
+click. Removing it also adds it to the dictionary permanently, so it is caught
+instantly from then on.
+
+### Adding a term mid-session
+
+Open `wordlist.txt`, add the term under `[exact]`, and save. The server notices the
+file changed and picks it up on the next word. No restart, nobody disconnected.
+
+After editing, run the safety check:
+
+```bash
+python filter.py --collisions
+```
+
+This verifies that nothing in the dictionary accidentally blocks an ordinary word.
+That failure matters more than it sounds: a filter that eats `class`, `pass` or
+`coming` stops the activity dead. The check runs against a corpus of common English
+and Hindi vocabulary and must report no collisions.
+
+### How well it works
+
+Tested against a labelled set of 250 words, half of which should be blocked and
+half of which are ordinary English and Hindi vocabulary:
 
 | | Result |
 |---|---|
-| Latency | **~2,500 ms per word.** Nowhere near real time. |
-| `behenchod` | **Allowed.** One of the worst words, waved straight through. |
-| `randi` | **Allowed.** |
-| `kutta` | **Blocked.** It means "dog". |
-| `saala` | **Blocked.** Mild, extremely common, and fine in a story. |
+| Dictionary, correct | 250 / 250 |
+| Let something through | 0 |
+| Blocked an ordinary word | 0 |
+| Speed | over 40,000 words per second |
 
-So the model is not the gate. A normalised set lookup is the gate. It is about
-300,000 times faster and, on the words that matter, considerably more accurate.
+The second number matters more than the first. A filter that eats `class`, `pass`
+or `coming` stops the activity dead, so the dictionary is checked against a corpus
+of common vocabulary on every change and must never touch any of it.
 
-### Normalisation is the interesting part
-
-People try to get past filters, and a plain wordlist is beaten in seconds. Every
-one of these hits the single blocklist entry `chutiya`:
-
-```
-chutiya    CHUTIYAAAAA    ch00tiya    c-h-u-t-i-y-a    ch@t1ya    chootiya
-```
-
-The pipeline that gets them all there:
-
-1. Lowercase, and strip accents.
-2. Fold leetspeak. `0` becomes `o`, `3` becomes `e`, `@` becomes `a`, and so on.
-3. Delete everything that is not a letter, so punctuation and spacing tricks die.
-4. Collapse stretched letters, so `fuuuuck` becomes `fuck`.
-5. Fold long-vowel spellings, so `chootiya` becomes `chutiya` and `raandi`
-   becomes `randi`. Romanised Hindi has no single correct spelling, and this is
-   what lets the wordlist carry one entry instead of eight.
-
-Devanagari is matched directly, without any of that, because decomposing it would
-pull the matras off the consonants and break the match.
-
-### Not blocking ordinary words
-
-The opposite failure is worse in a story game. If `class` and `pass` and `grass`
-get eaten because they contain `ass`, the activity stops being fun immediately.
-
-Two things prevent it:
-
-- The wordlist has **two sections**. `[exact]` terms must match the whole word,
-  which is where short risky ones like `ass` live. `[contains]` is only for long
-  roots that cannot appear inside anything innocent, like `madarchod`.
-- An **allowlist** is checked first. It includes `chudail`, which means witch, is a
-  perfectly good story word, and contains a root we block.
-
-Verified against 184 ordinary English and Hindi words: **zero false positives.**
-
-### Check it yourself
+### Testing
 
 ```bash
 python filter.py
 ```
 
-```
-  allow  chudail                   0 us  allowlisted
-  BLOCK  b3h3nch0d                 4 us  blocked  <- behenchod
-  BLOCK  ch00tiya                  7 us  blocked  <- chutiya
-  allow  grass                     0 us  allowlisted
-  BLOCK  गांडू                     1 us  blocked  <- गांडू
-```
+Shows what the dictionary does with a set of sample inputs, and how long it takes.
 
 ```bash
-python filter.py somevword anotherword
+python test_ai.py
 ```
 
----
-
-## During the session
-
-**Adding a word to the blocklist live.** Open `wordlist.txt`, add the word under
-`[exact]`, save. The server notices the file changed and reloads on the next
-submission. No restart, nobody gets disconnected.
-
-**Someone got something through.** Undo removes the last word. Reset clears
-everything. Both are yours only, via the `?key=` URL.
-
-**Saving the story.** Copy story, or open `/story.txt`.
-
-**The counter.** Everyone sees how many words the bot has eaten, but never which
-ones. That keeps the filter part of the fun without putting the words on the
-projector, which is the entire reason it is only a number.
-
----
-
-## The optional second opinion
-
-```bash
-python server.py --audit
-```
-
-With this on, words that pass the blocklist are *also* sent to a local ollama model
-in the background. This happens **after** the word is already visible and never
-delays anything. If the model objects, the word is struck through a few seconds
-later and written into `wordlist.txt` so it is caught instantly from then on.
-
-It is off by default because, per the measurements above, it misses obvious cases
-and objects to harmless ones. Its one real virtue is that the list improves during
-a session. Treat it as a supplement, never as the gate.
-
-Needs ollama running with a model pulled:
-
-```bash
-ollama serve
-```
-
-```bash
-ollama pull gemma3:1b
-```
+Runs the AI layer against a labelled test set and reports how many things it got
+wrong in each direction. Takes about ten minutes.
 
 ---
 
 ## Troubleshooting
 
-**Nobody else can connect.** Almost always the firewall. On Windows the first run
-pops a dialog asking whether to allow Python on the network, and it is easy to
-dismiss by accident. Allow it for Private networks, or:
+**Nobody else can connect.** Almost always the firewall. Windows shows a dialog the
+first time you run it, and it is easy to dismiss by accident. Allow Python on
+Private networks, or:
 
 ```bash
 netsh advfirewall firewall add rule name="Chaos Draft" dir=in action=allow protocol=TCP localport=8000
 ```
 
 **Campus wifi blocks device-to-device traffic.** Some networks isolate clients from
-each other, so no amount of firewall fixing will help. Test with one phone before
-the session. If it fails, a phone hotspot works fine for thirty people.
+each other, and no firewall change will help. Test with one phone before the
+session. If it fails, a phone hotspot handles thirty people fine.
 
-**The address is wrong.** The server guesses your LAN IP and can pick the wrong
-adapter if you have VPNs or virtual machines. Get the right one with `ipconfig` on
-Windows or `ip addr` elsewhere, and hand out that address on the same port.
+**The address is wrong.** The server guesses your network address and can pick the
+wrong adapter if you have a VPN or virtual machines. Get the right one with
+`ipconfig` on Windows or `ip addr` elsewhere, and hand that out on the same port.
 
-**It says reconnecting.** The page reconnects by itself when the wifi drops, which
-it will. The story is held on the server, so nothing is lost.
+**It says reconnecting.** The page reconnects on its own when wifi drops. The story
+lives on the server, so nothing is lost.
 
 ---
 
@@ -196,18 +188,9 @@ it will. The story is held on the server, so nothing is lost.
 
 | File | What |
 |---|---|
-| `server.py` | WebSocket server, room state, host controls |
-| `filter.py` | The gate. Normalisation and matching. Run it directly to test. |
-| `wordlist.txt` | The blocklist, with a long comment explaining the two sections |
-| `static/index.html` | The whole client. No build step, no dependencies. |
-
----
-
-## Why this is in a git workshop repo
-
-It is not about git, and it is a good thing to have built. If anyone asks how it
-works after the session, the answer touches Unicode normalisation, WebSockets,
-adversarial input, and the habit of measuring an approach before committing to it.
-
-The filter is what it is because the first design was tested and found wanting.
-That is worth more than the code.
+| `server.py` | The server. Room state, host controls, connections. |
+| `filter.py` | The filtering logic. Run it directly to test. |
+| `wordlist.txt` | The terms to block, and the ordinary words to protect. |
+| `safe_words.txt` | Vocabulary used by the collision check. Not used at runtime. |
+| `test_ai.py` | Test suite for the AI layer. |
+| `static/index.html` | The whole page. No build step, no dependencies. |

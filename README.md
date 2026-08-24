@@ -49,6 +49,38 @@ That contrast is the whole point of splitting them.
 
 ---
 
+## The poem
+
+Every phase uses this same text. Copy it straight from here.
+
+```
+Shall I compare thee to a summer's day?
+Thou art more lovely and more temperate:
+Rough winds do shake the darling buds of May,
+And summer's lease hath all too short a date;
+Sometime too hot the eye of heaven shines,
+And often is his gold complexion dimm'd;
+And every fair from fair sometime declines,
+By chance or nature's changing course untrimm'd;
+But thy eternal summer shall not fade,
+Nor lose possession of that fair thou ow'st;
+Nor shall death brag thou wander'st in his shade,
+When in eternal lines to time thou grow'st:
+   So long as men can breathe or eyes can see,
+   So long lives this, and this gives life to thee.
+```
+
+Sonnet 18, William Shakespeare, 1609. Out of copyright, so do what you like to it.
+
+**Why the same poem three times.** It is fourteen lines, everybody half knows the
+first one, and reusing it means the poem is never the new thing you are learning.
+The git is. In Phase 2 you write your own version of it. In Phase 3 your team
+rewrites it together and stands on each other's toes doing it.
+
+The numbered copy lives in [`poem/sonnet-18.md`](poem/sonnet-18.md).
+
+---
+
 ## What you actually learn
 
 **git**, the tool on your computer: `init`, `add`, `commit`, `status`, `log`,
