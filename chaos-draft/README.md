@@ -52,12 +52,22 @@ The server prints two addresses:
 Put the **first** on the projector. Open the **second** yourself.
 
 The second one is the same page plus the controls that let you remove words and
-wipe the story. The key in it is generated fresh every time you start the server
-and is printed only in your own terminal. There is no fixed default, deliberately:
-this repository is public, so any key written down here would be a key everyone in
-the room already has.
+wipe the story.
 
-Keep that URL to yourself. If it leaks, restart the server and you get a new one.
+The key is generated the first time you run the server and saved to `.host-key`,
+so **your host URL is the same every time**, including after a restart mid-session.
+It is printed only in your own terminal, and `.host-key` is gitignored so it never
+reaches the repository.
+
+There is no fixed default, deliberately. This repository is public, so any key
+written down here would be a key everyone in the room already has, and the host
+controls include wiping the story for all thirty of them.
+
+Keep that URL to yourself. If it leaks:
+
+```bash
+python server.py --new-key
+```
 
 Needs Python 3.9 or newer.
 
@@ -86,9 +96,14 @@ python server.py --port 8080
 python server.py --host-key your-own-secret
 ```
 
-Pins the host key instead of generating a random one, so your host URL survives a
-restart. Only worth it if you have already sent yourself the link. Do not pick
-something guessable.
+Pins a key you choose, instead of the saved random one. Do not pick something
+guessable.
+
+```bash
+python server.py --new-key
+```
+
+Discards the saved key and generates a new one. Use this if your host URL leaks.
 
 ---
 

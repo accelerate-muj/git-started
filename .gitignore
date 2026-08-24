@@ -27,3 +27,6 @@ venv/
 
 # Node
 node_modules/
+
+# The host key for Chaos Draft. Machine-local, never commit it.
+.host-key

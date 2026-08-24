@@ -262,6 +262,47 @@ def make_app(room: Room, host_key: str) -> FastAPI:
     return app
 
 
+KEY_FILE = HERE / ".host-key"
+
+
+def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
+    """
+    Work out the host key, and say where it came from.
+
+    Order of preference:
+      1. --host-key on the command line, for when you want to choose it yourself
+      2. .host-key next to this file, so the URL survives a restart
+      3. a fresh random one, saved to .host-key for next time
+
+    There is deliberately no fixed default. This repository is public, so any key
+    written into the code or the README would be a key everybody in the room
+    already has, and the host controls include wiping the story for everyone.
+
+    .host-key is gitignored. It should never be committed.
+    """
+    if explicit:
+        return explicit, "from --host-key"
+
+    if rotate and KEY_FILE.exists():
+        KEY_FILE.unlink()
+
+    if KEY_FILE.exists():
+        saved = KEY_FILE.read_text(encoding="utf-8").strip()
+        if saved:
+            return saved, f"reused from {KEY_FILE.name}"
+
+    key = secrets.token_urlsafe(9)
+    try:
+        KEY_FILE.write_text(key + "\n", encoding="utf-8")
+        # Best effort. Does very little on Windows, and costs nothing to try.
+        with suppress(Exception):
+            KEY_FILE.chmod(0o600)
+        return key, f"new, saved to {KEY_FILE.name}"
+    except OSError:
+        # Read-only checkout or similar. Still works, just not across restarts.
+        return key, "new, could not be saved"
+
+
 def lan_ip() -> str:
     """Best guess at the address other machines can reach, without sending traffic."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -281,15 +322,13 @@ def main() -> None:
     p.add_argument("--cooldown", type=float, default=1.0,
                    help="Seconds a person waits between words. 0 disables it.")
     p.add_argument("--host-key",
-                   help="Secret that unlocks the host controls. A random one is "
-                        "generated if you do not set this, which is the safe default.")
+                   help="Pin the host key yourself. Otherwise one is generated and "
+                        "remembered in .host-key so your URL survives a restart.")
+    p.add_argument("--new-key", action="store_true",
+                   help="Throw away the saved key and generate a new one.")
     args = p.parse_args()
 
-    # A fixed default would be worthless. This repository is public, so any
-    # default written down here or in the README is a key everybody in the room
-    # already has, and the host controls include wiping the story for everyone.
-    # Random per run, printed only in the host's own terminal.
-    host_key = args.host_key or secrets.token_urlsafe(9)
+    host_key, key_origin = host_key_for_run(args.host_key, args.new_key)
 
     room = Room(cooldown=args.cooldown)
     app = make_app(room, host_key)
@@ -303,7 +342,8 @@ def main() -> None:
     print()
     print(f"  Everyone opens:   http://{ip}:{args.port}")
     print(f"  Host controls:    http://{ip}:{args.port}/?key={host_key}")
-    print("                    ^ yours only. Do not put this on the projector.")
+    print(f"                    ^ yours only, {key_origin}.")
+    print("                    Same after a restart. Do not put it on the projector.")
     print()
     print(f"  Cooldown: {args.cooldown}s")
     print("  Edit wordlist.txt during the session and it takes effect immediately.")
