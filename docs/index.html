@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>git started &middot; workshop handbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Accelerate palette, matching git-guide and the Dashboard. */
+  :root{
+    --bg:#f7f2e6; --bg-dark:#efe8d5; --card:#fffdf6;
+    --text:#211d16; --red:#b8231f; --red-hover:#8f1815;
+    --green:#2e7d43; --green-light:#eef5e9; --amber:#d99a2b;
+    --blue:#1a6fb5; --blue-light:#e8f0f8;
+    --border:rgba(33,29,22,.22); --border-strong:#211d16;
+    --serif:'Newsreader',Georgia,serif;
+    --mono:'IBM Plex Mono',Consolas,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;scroll-padding-top:62px}
+  body{background:var(--bg);color:var(--text);font-family:var(--serif);
+    font-size:17px;line-height:1.62;-webkit-text-size-adjust:100%}
+
+  /* ---------- sticky top ---------- */
+  header{position:sticky;top:0;z-index:20;background:var(--card);
+    border-bottom:1.5px solid var(--border)}
+  .bar{display:flex;align-items:center;gap:10px;padding:9px 16px;flex-wrap:wrap}
+  .brand{font-family:var(--sans);font-weight:600;font-size:15px;white-space:nowrap}
+  .brand span{color:var(--red)}
+  .tabs{display:flex;gap:4px;flex:1;min-width:0}
+  .tab{font-family:var(--sans);font-size:12.5px;padding:5px 11px;border-radius:6px;
+    border:1.5px solid transparent;color:rgba(33,29,22,.65);text-decoration:none;
+    white-space:nowrap}
+  .tab:hover{background:var(--bg-dark);color:var(--text)}
+  .tab.on{border-color:var(--red);color:var(--red);font-weight:600}
+  #setupbtn{font-family:var(--sans);font-size:12px;padding:5px 10px;border-radius:6px;
+    border:1.5px solid var(--border);background:transparent;color:rgba(33,29,22,.75);
+    cursor:pointer;white-space:nowrap}
+  #setupbtn:hover{border-color:var(--border-strong);color:var(--text)}
+  #setupbtn.warn{border-color:var(--red);color:var(--red);font-weight:600}
+
+  /* ---------- your details ---------- */
+  #setup{background:var(--bg-dark);border-bottom:1.5px solid var(--border);
+    padding:12px 16px;display:none}
+  #setup.on{display:block}
+  #setup .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .fld{display:flex;flex-direction:column;gap:3px;flex:1;min-width:132px}
+  .fld label{font-family:var(--sans);font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.07em;color:rgba(33,29,22,.55);font-weight:600}
+  .fld input{font-family:var(--mono);font-size:13px;padding:7px 9px;
+    border:1.5px solid var(--border);border-radius:6px;background:var(--card);
+    color:var(--text);outline:none;width:100%}
+  .fld input:focus{border-color:var(--red)}
+  #setup .hint{font-family:var(--sans);font-size:11.5px;color:rgba(33,29,22,.6);
+    margin-top:9px;line-height:1.5}
+
+  /* ---------- layout ---------- */
+  main{max-width:780px;margin:0 auto;padding:26px 16px 100px}
+  h1{font-family:var(--sans);font-size:26px;font-weight:600;letter-spacing:-.3px;
+    margin:0 0 4px}
+  .sub{color:rgba(33,29,22,.62);font-style:italic;margin-bottom:22px}
+  h2{font-family:var(--sans);font-size:20px;font-weight:600;margin:38px 0 4px;
+    padding-top:12px;border-top:1.5px solid var(--border);scroll-margin-top:62px}
+  h2 .n{color:var(--red);font-variant-numeric:tabular-nums}
+  h3{font-family:var(--sans);font-size:15.5px;font-weight:600;margin:26px 0 6px;
+    scroll-margin-top:62px}
+  p{margin:0 0 12px}
+  ul,ol{margin:0 0 12px 20px}
+  li{margin-bottom:5px}
+  a{color:var(--red)}
+  strong{font-weight:600}
+  em{font-style:italic}
+
+  /* ---------- steps ---------- */
+  .step{border-left:2.5px solid var(--red);padding:2px 0 2px 16px;margin:22px 0}
+  .step > .lbl{font-family:var(--sans);font-size:10.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.09em;color:var(--red);
+    display:block;margin-bottom:3px}
+  .step h3{margin-top:0}
+
+  /* ---------- commands ---------- */
+  .cmd{position:relative;background:var(--text);border-radius:7px;margin:10px 0;
+    display:flex;align-items:stretch;overflow:hidden}
+  .cmd pre{font-family:var(--mono);font-size:13.5px;line-height:1.6;color:#f7f2e6;
+    padding:11px 13px;overflow-x:auto;flex:1;white-space:pre;tab-size:2}
+  .cmd .cp{font-family:var(--sans);font-size:11px;font-weight:600;background:transparent;
+    border:0;border-left:1px solid rgba(247,242,230,.16);color:rgba(247,242,230,.6);
+    padding:0 12px;cursor:pointer;flex-shrink:0}
+  .cmd .cp:hover{background:rgba(247,242,230,.1);color:#f7f2e6}
+  .cmd .cp.done{color:#7ddc9a}
+  .out{font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--bg-dark);
+    border:1.5px solid var(--border);border-radius:7px;padding:10px 12px;margin:10px 0;
+    overflow-x:auto;white-space:pre;color:rgba(33,29,22,.8)}
+  code{font-family:var(--mono);font-size:.9em;background:var(--bg-dark);
+    padding:1px 5px;border-radius:4px}
+  .tok{color:var(--amber)}
+
+  /* ---------- callouts ---------- */
+  .note{border-left:2.5px solid var(--blue);background:var(--blue-light);
+    padding:11px 14px;border-radius:0 7px 7px 0;margin:14px 0;font-size:15.5px}
+  .warn{border-left:2.5px solid var(--red);background:rgba(184,35,31,.06);
+    padding:11px 14px;border-radius:0 7px 7px 0;margin:14px 0;font-size:15.5px}
+  .win{border-left:2.5px solid var(--green);background:var(--green-light);
+    padding:11px 14px;border-radius:0 7px 7px 0;margin:14px 0;font-size:15.5px}
+  .note b,.warn b,.win b{font-family:var(--sans);font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:3px}
+  .note b{color:var(--blue)} .warn b{color:var(--red)} .win b{color:var(--green)}
+
+  /* ---------- collapsibles ---------- */
+  details{border:1.5px solid var(--border);border-radius:7px;margin:14px 0;
+    background:var(--card)}
+  details[open]{background:var(--card)}
+  summary{font-family:var(--sans);font-size:13.5px;font-weight:600;padding:10px 14px;
+    cursor:pointer;list-style:none;color:var(--text)}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:"▸ ";color:var(--red)}
+  details[open] summary::before{content:"▾ "}
+  details .body{padding:0 14px 12px;font-size:15.5px}
+
+  /* ---------- story ---------- */
+  .story{font-size:17.5px}
+  .story .beat{font-family:var(--sans);font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.09em;color:var(--red);
+    margin:22px 0 6px}
+  .story .punch{font-size:19px;font-style:italic;color:var(--text);
+    border-left:2.5px solid var(--amber);padding-left:14px;margin:16px 0}
+
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14.5px}
+  th{font-family:var(--sans);font-size:11px;text-transform:uppercase;
+    letter-spacing:.07em;text-align:left;padding:7px 9px;
+    border-bottom:1.5px solid var(--border-strong);color:rgba(33,29,22,.6)}
+  td{padding:8px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+  td code{font-size:12.5px}
+
+  /* ---------- trouble search ---------- */
+  #tsearch{font-family:var(--sans);font-size:13.5px;padding:9px 12px;width:100%;
+    border:1.5px solid var(--border);border-radius:7px;background:var(--card);
+    color:var(--text);outline:none;margin-bottom:10px}
+  #tsearch:focus{border-color:var(--red)}
+  tr.hide{display:none}
+
+  /* ---------- misc ---------- */
+  .check{background:var(--card);border:1.5px solid var(--border);border-radius:8px;
+    padding:14px 16px;margin:18px 0}
+  .check .lbl{font-family:var(--sans);font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.08em;color:rgba(33,29,22,.55);
+    margin-bottom:7px}
+  .check ol{margin-bottom:0}
+  footer{border-top:1.5px solid var(--border);margin-top:44px;padding-top:16px;
+    font-family:var(--sans);font-size:12.5px;color:rgba(33,29,22,.55)}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
+    font-family:var(--sans);font-size:13px;padding:9px 16px;border-radius:7px;
+    background:var(--text);color:var(--bg);opacity:0;pointer-events:none;
+    transition:opacity .18s;z-index:40}
+  #toast.on{opacity:1}
+
+  @media(max-width:620px){
+    body{font-size:16px}
+    main{padding:18px 12px 80px}
+    .cmd pre{font-size:12.5px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">git <span>started</span></div>
+    <nav class="tabs">
+      <a class="tab" href="#phase1">1 &middot; Your own repo</a>
+      <a class="tab" href="#phase2">2 &middot; Fork &amp; PR</a>
+      <a class="tab" href="#phase3">3 &middot; Conflicts</a>
+      <a class="tab" href="#trouble">Help</a>
+    </nav>
+    <button id="setupbtn">Your details</button>
+  </div>
+
+  <div id="setup">
+    <div class="row">
+      <div class="fld">
+        <label for="f-user">GitHub username</label>
+        <input id="f-user" placeholder="priya" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label for="f-name">Short name (branches, files)</label>
+        <input id="f-name" placeholder="priya" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label for="f-team">Team name (Phase 3)</label>
+        <input id="f-team" placeholder="hackers" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fld">
+        <label for="f-leader">Leader's username (Phase 3)</label>
+        <input id="f-leader" placeholder="priya" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="hint">
+      Fill these in once. Every command below rewrites itself with your details, so
+      you can copy and run without editing anything. Saved in this browser only.
+    </div>
+  </div>
+</header>
+
+<main>
+
+<h1>git started</h1>
+<div class="sub">Accelerate workshop 3. Keep this on one half of your screen and your
+terminal on the other.</div>
+
+<div class="note">
+  <b>Before anything else</b>
+  Click <strong>Your details</strong> at the top and type your GitHub username.
+  Every command on this page will fill itself in. This is the single biggest
+  cause of wasted time in a workshop, and it takes ten seconds to remove.
+</div>
+
+
+<!-- ===================== PHASE 1 ===================== -->
+<h2 id="phase1"><span class="n">1</span> &nbsp;Your own repo</h2>
+
+<details open>
+<summary>First, why any of this exists</summary>
+<div class="body story">
+
+<p>You are writing a poem. You save it as <code>poems.txt</code>.</p>
+
+<p>You change a line. You want the old one back, just in case. So you save a
+copy. <code>poems_v2.txt</code>. Then <code>poems_final.txt</code>. Then
+<code>poems_final_ACTUAL.txt</code>.</p>
+
+<div class="beat">Another problem</div>
+<p>You save <code>Diff_file_0_file_1.txt</code>. You feel proud of yourself for
+a second.</p>
+<p>Now do it again for file_1 and file_2. And again for file_0 and file_2, just
+in case you need to compare those too.</p>
+<p>Three files. Three diffs. And you have barely started the poem.</p>
+<p>Now imagine this is not a poem. Imagine it is twenty files, for a real
+project, and every single one needs its own diff, against every other version of
+itself, forever.</p>
+
+<div class="punch">You are not writing poems any more. You are writing paperwork
+about poems.</div>
+
+<div class="beat">Try again?</div>
+<p>Okay, new idea. Forget the separate diff files. Just keep one file,
+<code>changelog.txt</code>, and every time you save, add a line about what you
+did.</p>
+<div class="out">Fixed the roses line.
+Added a new stanza.
+Changed the ending, felt too sad.</div>
+<p>One file. One place to check. Feels almost responsible.</p>
+
+<div class="beat">But</div>
+<p>Read that second line again. <em>"Fixed the roses line."</em></p>
+<p>Fixed it how? What did it say before you fixed it? You do not know. You did
+not write it down. You wrote that you changed something, not what it used to
+be.</p>
+<p>And be honest. The day you were tired, or in a hurry, or just forgot? You did
+not update the changelog that day either. You know you did not.</p>
+
+<div class="punch">It is not a record. It is a note you are hoping you can trust
+later.</div>
+
+<div class="beat">One more problem</div>
+<p>Your friend actually likes your poem. They want to add a line.</p>
+<p>You send them <code>poems.txt</code>. They add something beautiful, save it,
+and email it back as <code>poems_returned.txt</code>.</p>
+<p>Except, while you were waiting for them to reply, you kept writing too. You
+added your own line. You have your version. They have theirs.</p>
+<p>Both of you did something right. Neither of you did anything wrong.</p>
+
+<div class="punch">So which file is the poem now?</div>
+
+<div class="beat">A solution? Maybe?</div>
+<p>Fine. Open both files side by side. Read every single line of both. Find what
+is different. Carefully copy the good parts into a new file.</p>
+<p>Call it, of course, <code>poems_merged_v2_final.txt</code>.</p>
+<p>You did it. It is late, your eyes hurt from comparing two identical-looking
+paragraphs for the fifteenth time, but you did it.</p>
+
+<div class="beat">The truth</div>
+<p>You will miss a line eventually. Not because you are careless, but because
+comparing two versions of anything by eye, line by line, for long enough, is
+exactly the kind of task humans are bad at and do not notice they are bad at.</p>
+<p>Your friend's favourite line, the one they were proudest of, quietly does not
+make it into the merged file. Nobody meant for that to happen. It just did.</p>
+<p>And now think about doing this every time either of you saves. Now think about
+doing it with three friends. Five.</p>
+
+<div class="beat">Let us be honest with ourselves</div>
+<p>Look back at everything you just tried. Naming files "final". Numbering them.
+Writing diffs by hand. Keeping a changelog. Comparing two files line by line at
+midnight.</p>
+<p>Every single one of them needed you, a tired, distracted, forgetful human, to
+do the right thing, perfectly, every single time, forever.</p>
+
+<div class="punch">One tired night. One missed line. One overwritten file. That
+is all it takes to lose hours of work you cannot get back.</div>
+
+<div class="beat">What if</div>
+<p>What if you did not have to remember any of this?</p>
+<p>What if something kept every version, automatically, the moment you saved,
+with no renaming required?</p>
+<p>What if it could tell you exactly what changed, down to the line, without you
+writing a single diff by hand?</p>
+<p>What if two people could edit the same file, at the same time, and it figured
+out how to combine both of your work, without either of you losing a line?</p>
+
+<p><strong>Sit with that question for a second before you answer it.</strong></p>
+
+<p>Then open your terminal. That is the rest of today.</p>
+
+</div>
+</details>
+
+
+<div class="step">
+  <span class="lbl">Step 1</span>
+  <h3>Make a folder and claim it</h3>
+  <div class="cmd"><pre data-cmd="mkdir my-first-repo
+cd my-first-repo
+git init"></pre><button class="cp">copy</button></div>
+  <p><code>git init</code> made a hidden <code>.git</code> folder. Look at it:</p>
+  <div class="cmd"><pre data-cmd="ls -a"></pre><button class="cp">copy</button></div>
+  <p>That <code>.git</code> directory <em>is</em> the repository. Every version,
+  every message, every branch lives inside it. Delete it and you have an ordinary
+  folder with no history.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 2</span>
+  <h3>Write something, then look at it through git</h3>
+  <div class="cmd"><pre data-cmd="echo &quot;Shall I compare thee to a summer's day?&quot; > poem.txt
+git status"></pre><button class="cp">copy</button></div>
+  <p>Git says <code>poem.txt</code> is <strong>untracked</strong>. It can see the
+  file but is not watching it yet. Git never assumes you want something recorded,
+  which is why passwords and build output do not end up in your history by
+  accident.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 3</span>
+  <h3>Stage it, then commit it</h3>
+  <div class="cmd"><pre data-cmd="git add poem.txt
+git status"></pre><button class="cp">copy</button></div>
+  <p>Now it is <strong>staged</strong>. You have not saved anything yet. You have
+  put it on a shelf that holds what goes into the next commit.</p>
+  <div class="cmd"><pre data-cmd="git commit -m &quot;Add the first line&quot;
+git log --oneline"></pre><button class="cp">copy</button></div>
+  <div class="win">
+    <b>That is the loop</b>
+    Change something, stage it, describe it, record it. You will repeat this for
+    the rest of your life as a programmer. Do it twice more before moving on.
+  </div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 4</span>
+  <h3>Log in to GitHub from the terminal</h3>
+  <p>Sabse pehle we need to login. Everyone does this once:</p>
+  <div class="cmd"><pre data-cmd="gh auth login"></pre><button class="cp">copy</button></div>
+  <p>Answer: <strong>GitHub.com</strong> &rarr; <strong>HTTPS</strong> &rarr;
+  <strong>yes</strong> to authenticate git with your GitHub credentials &rarr;
+  <strong>login with a web browser</strong>. Copy the code, press Enter, paste it
+  in the browser.</p>
+  <div class="warn">
+    <b>Do not skip the third answer</b>
+    "Authenticate Git with your GitHub credentials?" &rarr; <strong>Yes</strong>.
+    That is what stops <code>git push</code> asking for a password every single
+    time.
+  </div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 5</span>
+  <h3>Push it to GitHub</h3>
+  <p>The base command is <code>gh repo create</code>. Before you run it, answer
+  four questions. That is all the flags are.</p>
+
+  <table>
+    <tr><th>Question</th><th>Flag</th></tr>
+    <tr><td><strong>1.</strong> Same name as the folder, or different?</td>
+        <td>same: <code>--source=.</code><br>different: <code>gh repo create my-first-repo</code></td></tr>
+    <tr><td><strong>2.</strong> Who can see it?</td>
+        <td><code>--public</code> anyone on the internet<br>
+            <code>--private</code> only you and people you invite</td></tr>
+    <tr><td><strong>3.</strong> This folder, or a different one?</td>
+        <td>this one: <code>--source=.</code><br>
+            elsewhere: <code>--source=./projects/my-app</code><br>
+            neither: leave it out, you get an empty repo linked to nothing</td></tr>
+    <tr><td><strong>4.</strong> Push now, or later?</td>
+        <td><code>--push</code> now, omit it to push later</td></tr>
+  </table>
+
+  <p>Plus a description, so anyone who finds it knows what it is:</p>
+  <div class="cmd"><pre data-cmd="gh repo create my-first-repo --public --source=. --remote=origin --push --description &quot;My first CLI workshop repo&quot;"></pre><button class="cp">copy</button></div>
+
+  <div class="note">
+    <b>Do the flags have to be in that order?</b>
+    No. Flags can go in any order. Only the repo name is positional.
+  </div>
+
+  <p>Now look at it:</p>
+  <div class="cmd"><pre data-cmd="gh repo view --web"></pre><button class="cp">copy</button></div>
+</div>
+
+<details>
+<summary>What just got wired up: origin, upstream, and the three kinds of branch</summary>
+<div class="body">
+  <p><strong>An upstream</strong> is a tracked link between a local branch and a
+  remote branch. It tells git that when you run <code>git push</code> or
+  <code>git pull</code>, <em>this</em> is the remote branch you should talk
+  to.</p>
+
+  <p><strong>Three types of branch:</strong></p>
+  <table>
+    <tr><th>Kind</th><th>Where it lives</th></tr>
+    <tr><td>Local branch</td><td>On your machine. What you work on.</td></tr>
+    <tr><td>Remote-tracking branch</td>
+        <td>On your machine, read only. A snapshot of the server, updated when you
+            run <code>git fetch</code>. This is <code>origin/main</code>.</td></tr>
+    <tr><td>Remote branch</td><td>On the GitHub server. The real thing.</td></tr>
+  </table>
+
+  <p><code>origin</code> is just a nickname for a URL, and it is
+  <strong>per folder, not global</strong>. Every repo on your machine can have a
+  remote called <code>origin</code> pointing somewhere different. Git looks it up
+  in <code>.git/config</code>.</p>
+
+  <div class="cmd"><pre data-cmd="git remote -v
+cat .git/config"></pre><button class="cp">copy</button></div>
+
+  <p><strong>Why a short name matters.</strong> Without one you would push like
+  this, every time:</p>
+  <div class="out">git push https://github.com/{{user}}/my-first-repo.git main</div>
+  <p>With one, and after setting the upstream once, it is just:</p>
+  <div class="cmd"><pre data-cmd="git push"></pre><button class="cp">copy</button></div>
+  <p>The one-time setup is <code>git push -u origin main</code>. The
+  <code>-u</code> is what creates the tracked link. <code>--push</code> in step 5
+  did it for you.</p>
+</div>
+</details>
+
+<div class="check">
+  <div class="lbl">You should be able to answer</div>
+  <ol>
+    <li>What is inside <code>.git</code>, and what happens if you delete it?</li>
+    <li>What is the difference between <code>git add</code> and <code>git commit</code>?</li>
+    <li>Why does <code>git push</code> need no arguments after the first time?</li>
+    <li>Can two different repos on your laptop both have a remote called <code>origin</code>?</li>
+  </ol>
+</div>
+
+
+<!-- ===================== PHASE 2 ===================== -->
+<h2 id="phase2"><span class="n">2</span> &nbsp;Fork, branch, push, PR</h2>
+
+<p>In Phase 1 you owned everything, so it was simple. Now you are contributing to
+a repo you <strong>do not own</strong>. You cannot push to it directly.</p>
+
+<p>So: fork it &rarr; clone your fork &rarr; branch &rarr; edit &rarr; push to your
+fork &rarr; open a pull request back to the original.</p>
+
+<div class="note">
+  <b>The repo</b>
+  <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">github.com/accelerate-muj/git-started</a>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 1</span>
+  <h3>Fork it</h3>
+  <p>Open the repo in your browser and click <strong>Fork</strong> (top right).
+  Owner &rarr; your account. Keep the default name. <strong>Create fork</strong>.</p>
+  <p>GitHub copies the repo into your account. It is now at
+  <code>github.com/<span class="tok">{{user}}</span>/git-started</code>. You own
+  it. You can push to it. Nothing is on your laptop yet.</p>
+  <p>Or do the whole thing from the terminal, fork and clone in one:</p>
+  <div class="cmd"><pre data-cmd="gh repo fork accelerate-muj/git-started --clone"></pre><button class="cp">copy</button></div>
+  <p>That also sets up <code>upstream</code> for you. If you used the browser
+  button, do steps 2 and 3 by hand.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 2</span>
+  <h3>Clone YOUR fork</h3>
+  <div class="cmd"><pre data-cmd="gh repo clone {{user}}/git-started
+cd git-started
+git remote -v"></pre><button class="cp">copy</button></div>
+  <p>You should see <strong>your</strong> username in the origin URL:</p>
+  <div class="out">origin  https://github.com/{{user}}/git-started.git (fetch)
+origin  https://github.com/{{user}}/git-started.git (push)</div>
+  <div class="warn">
+    <b>If you see accelerate-muj instead of your username</b>
+    You cloned the original by mistake, and your push will be rejected later.
+    Fix it now:
+  </div>
+  <div class="cmd"><pre data-cmd="git remote set-url origin https://github.com/{{user}}/git-started.git"></pre><button class="cp">copy</button></div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 3</span>
+  <h3>Add the original as <code>upstream</code></h3>
+  <p>Your fork is a snapshot. If the original changes, your fork will not know.
+  Add it as a second remote:</p>
+  <div class="cmd"><pre data-cmd="git remote add upstream https://github.com/accelerate-muj/git-started.git
+git remote -v"></pre><button class="cp">copy</button></div>
+  <p>Now you have two: <code>origin</code> is <strong>your fork</strong>, which
+  you can push to. <code>upstream</code> is <strong>ours</strong>, which you can
+  only fetch from. That pair of names is a near universal convention.</p>
+  <div class="cmd"><pre data-cmd="git fetch upstream
+git merge upstream/main"></pre><button class="cp">copy</button></div>
+  <p>If nothing has changed since you forked, this prints
+  <code>Already up to date.</code></p>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 4</span>
+  <h3>Branch, never on main</h3>
+  <div class="cmd"><pre data-cmd="git switch -c add-{{name}}
+git branch"></pre><button class="cp">copy</button></div>
+  <p>The <code>*</code> marks where you are. Branching before you work keeps
+  <code>main</code> clean and means your pull request contains only the thing you
+  meant to propose.</p>
+  <div class="note">
+    <b>switch or checkout?</b>
+    <code>git switch -c</code> and <code>git checkout -b</code> do the same thing
+    here. <code>switch</code> was added in 2019 because <code>checkout</code> did
+    three unrelated jobs and confused everyone for a decade. Either works.
+  </div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 5</span>
+  <h3>Write your file</h3>
+  <p>Exactly one file, named after your GitHub username:</p>
+  <div class="cmd"><pre data-cmd="echo &quot;Hi, I am {{name}}. I am learning git at this workshop.&quot; > phase-2/poems/{{user}}.md"></pre><button class="cp">copy</button></div>
+  <p>Then open it and write something better. Sonnet 18 in modern English, in
+  Hindi, as a group chat, as a parody. Anything.</p>
+  <div class="win">
+    <b>Why the filename rule exists</b>
+    Your GitHub username is unique, so no two people can create the same file, so
+    no two pull requests can touch the same line. Thirty PRs will merge in a row
+    without a single conflict. That is deliberate. Phase 3 removes the safety net.
+  </div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 6</span>
+  <h3>Stage, commit, push to your fork</h3>
+  <div class="cmd"><pre data-cmd="git add phase-2/poems/{{user}}.md
+git commit -m &quot;Add {{name}}'s take on Sonnet 18&quot;
+git push -u origin add-{{name}}"></pre><button class="cp">copy</button></div>
+  <div class="warn">
+    <b>It is <code>git add .</code> with a space</b>
+    <code>git add.</code> fails with <em>'add.' is not a git command</em>. Naming
+    the file directly, as above, is a better habit anyway: <code>git add .</code>
+    stages everything, including files you forgot you touched.
+  </div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 7</span>
+  <h3>Open the pull request</h3>
+  <div class="cmd"><pre data-cmd="gh pr create --repo accelerate-muj/git-started --title &quot;Add {{name}}&quot; --body &quot;Added my poem file.&quot;"></pre><button class="cp">copy</button></div>
+  <p>GitHub returns a URL. Open it and watch it get merged.</p>
+  <div class="warn">
+    <b>Do not forget <code>--repo</code></b>
+    Without it the PR opens against <em>your own fork</em>, which does nothing.
+    This is the single most common mistake in this phase.
+  </div>
+  <div class="cmd"><pre data-cmd="gh pr status
+gh pr list --repo accelerate-muj/git-started"></pre><button class="cp">copy</button></div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 8</span>
+  <h3>After it merges, catch your fork up</h3>
+  <div class="cmd"><pre data-cmd="git switch main
+gh repo sync {{user}}/git-started
+git pull
+ls phase-2/poems/"></pre><button class="cp">copy</button></div>
+  <p>You now have everyone else's files too.</p>
+</div>
+
+<div class="check">
+  <div class="lbl">You should be able to answer</div>
+  <ol>
+    <li>What is the difference between <code>origin</code> and <code>upstream</code>?</li>
+    <li>Why did the filename rule guarantee nobody would conflict?</li>
+    <li>Is a pull request a git feature, or a GitHub feature?</li>
+  </ol>
+  <p style="margin-top:8px;font-size:14.5px;color:rgba(33,29,22,.7)">
+  The last one catches people. Git has no idea what a PR is. It is a GitHub
+  product built on top of branches, which is exactly why you need <code>gh</code>
+  and not <code>git</code> to make one.</p>
+</div>
+
+
+<!-- ===================== PHASE 3 ===================== -->
+<h2 id="phase3"><span class="n">3</span> &nbsp;Teams and merge conflicts</h2>
+
+<p>Phase 2 had no conflicts because everyone had their own file. Real projects do
+not have that luxury. Now you are on a team, everyone edits the
+<strong>same file</strong>, and pushes collide.</p>
+
+<table>
+  <tr><th></th><th>Phase 2</th><th>Phase 3</th></tr>
+  <tr><td>Fork?</td><td>Yes</td><td>No, you are a collaborator</td></tr>
+  <tr><td>Push to</td><td>Your fork</td><td>The team repo directly</td></tr>
+  <tr><td>PR goes</td><td>Fork &rarr; original</td><td>Branch &rarr; main, same repo</td></tr>
+  <tr><td>Who merges</td><td>The repo owner</td><td>Everyone. You are all maintainers.</td></tr>
+  <tr><td>Conflicts</td><td>No</td><td><strong>Yes</strong></td></tr>
+</table>
+
+<div class="step">
+  <span class="lbl">Leader only &middot; Step 1</span>
+  <h3>Create the team repo</h3>
+  <p>Fastest way, from our template, which comes with the shared file already in
+  it:</p>
+  <div class="cmd"><pre data-cmd="gh repo create team-{{team}} --template accelerate-muj/git-started-team --public --clone
+cd team-{{team}}"></pre><button class="cp">copy</button></div>
+  <details>
+    <summary>Or build it from scratch, if you would rather see every step</summary>
+    <div class="body">
+      <div class="cmd"><pre data-cmd="gh repo create team-{{team}} --public
+mkdir team-{{team}} && cd team-{{team}}
+git init"></pre><button class="cp">copy</button></div>
+      <p>Create <code>team.txt</code> with a slot per person, then:</p>
+      <div class="cmd"><pre data-cmd="git add .
+git commit -m &quot;Initial team file&quot;
+git branch -M main
+git remote add origin https://github.com/{{leader}}/team-{{team}}.git
+git push -u origin main"></pre><button class="cp">copy</button></div>
+    </div>
+  </details>
+</div>
+
+<div class="step">
+  <span class="lbl">Leader only &middot; Step 2</span>
+  <h3>Add your teammates</h3>
+  <p>One line per teammate. Start this early, it is the step that eats time.</p>
+  <div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/collaborators/TEAMMATE-USERNAME"></pre><button class="cp">copy</button></div>
+  <p>Or use the web UI, which is often faster in a room:
+  repo &rarr; <strong>Settings</strong> &rarr; <strong>Collaborators</strong> &rarr;
+  <strong>Add people</strong>.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Everyone else &middot; Step 3</span>
+  <h3>Accept the invitation</h3>
+  <div class="warn">
+    <b>There is no <code>gh repo accept</code></b>
+    That command does not exist. It fails with
+    <em>unknown command "accept" for "gh repo"</em>. Use this instead, or just
+    click the link in your email or at
+    <a href="https://github.com/notifications" target="_blank" rel="noopener">github.com/notifications</a>.
+  </div>
+  <p>List your pending invitations and note the <code>id</code>:</p>
+  <div class="cmd"><pre data-cmd="gh api user/repository_invitations"></pre><button class="cp">copy</button></div>
+  <p>Then accept it:</p>
+  <div class="cmd"><pre data-cmd="gh api -X PATCH user/repository_invitations/INVITATION-ID"></pre><button class="cp">copy</button></div>
+  <p>Until you accept, your push is rejected with a confusing permission error.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Everyone &middot; Step 4</span>
+  <h3>Clone, branch, edit the shared file</h3>
+  <div class="cmd"><pre data-cmd="git clone https://github.com/{{leader}}/team-{{team}}.git
+cd team-{{team}}
+git switch -c add-{{name}}"></pre><button class="cp">copy</button></div>
+  <p>No fork and no <code>upstream</code> this time. You have push access to
+  <code>origin</code> directly, because you are on the inside of this project.
+  This is how a team of colleagues works, as opposed to how a stranger
+  contributes.</p>
+  <p>Open the shared file and fill in <strong>your</strong> slot. Then:</p>
+  <div class="cmd"><pre data-cmd="git add .
+git commit -m &quot;Add {{name}} to the team file&quot;
+git push -u origin add-{{name}}
+gh pr create --title &quot;Add {{name}}&quot; --body &quot;Added my info.&quot;"></pre><button class="cp">copy</button></div>
+  <p>No <code>--repo</code> needed now. The PR goes from your branch to
+  <code>main</code> inside the same repo.</p>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 5</span>
+  <h3>The conflict moment</h3>
+  <p>The first PR merges cleanly. Everything is fine. It will not be fine for
+  anybody else. GitHub will say:</p>
+  <div class="out">This branch has conflicts that must be resolved</div>
+  <div class="win">
+    <b>Nothing has gone wrong</b>
+    Your branch was built on a version of <code>main</code> that no longer exists.
+    Somebody else's line is now where yours was, and git will not guess which of
+    you should win. This is git asking you a question, not reporting an error.
+  </div>
+  <p>Fix it on your machine:</p>
+  <div class="cmd"><pre data-cmd="git switch main
+git pull origin main
+git switch add-{{name}}
+git merge main"></pre><button class="cp">copy</button></div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 6</span>
+  <h3>Read the markers</h3>
+  <div class="out">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+1. Name: Ananya   Language: JavaScript
+=======
+1. Name: Rahul    Language: Python
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; main</div>
+  <table>
+    <tr><th>Marker</th><th>Means</th></tr>
+    <tr><td><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code></td><td>Your version, on your branch</td></tr>
+    <tr><td><code>=======</code></td><td>The dividing line</td></tr>
+    <tr><td><code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; main</code></td><td>The version already on main</td></tr>
+  </table>
+  <div class="warn">
+    <b>The bit everyone gets wrong</b>
+    A conflict feels like a question of who wins. Almost always the right answer
+    is <strong>both</strong>. You want Rahul's line <em>and</em> yours. Delete the
+    three marker lines and keep both entries.
+  </div>
+  <p>The markers are just text git inserted. Nothing is watching them. Edit the
+  file until it reads the way it should, then:</p>
+  <div class="cmd"><pre data-cmd="git add .
+git commit -m &quot;Resolve conflict, keep both entries&quot;
+git push origin add-{{name}}"></pre><button class="cp">copy</button></div>
+  <div class="note">
+    <b><code>git add</code> is how you say "resolved"</b>
+    There is no separate resolve command, which surprises people. Staging the
+    file <em>is</em> the resolution.
+  </div>
+  <p>Stuck or panicking? You can always back out and start again. Nothing is
+  lost:</p>
+  <div class="cmd"><pre data-cmd="git merge --abort"></pre><button class="cp">copy</button></div>
+</div>
+
+<div class="step">
+  <span class="lbl">Step 7</span>
+  <h3>Review and merge each other's work</h3>
+  <div class="cmd"><pre data-cmd="gh pr list
+gh pr diff PR-NUMBER
+gh pr merge PR-NUMBER --merge"></pre><button class="cp">copy</button></div>
+  <div class="warn">
+    <b>The golden rule: one PR at a time</b>
+    After a merge, the next person pulls <code>main</code>, resolves their
+    conflict, and only then merges. If five people merge at once,
+    <code>main</code> becomes a mess and the last person faces a five-way conflict
+    nobody can untangle. Go around the table one by one.
+  </div>
+  <p>When everything is in:</p>
+  <div class="cmd"><pre data-cmd="git switch main
+git pull origin main
+git log --oneline --graph --all"></pre><button class="cp">copy</button></div>
+</div>
+
+<div class="check">
+  <div class="lbl">You should be able to answer</div>
+  <ol>
+    <li>What do <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> separate?</li>
+    <li>Which command marks a conflict resolved?</li>
+    <li>Your teammate merged first and your branch is stale. What now?</li>
+    <li>Why does merging one at a time make this easier?</li>
+  </ol>
+</div>
+
+
+<!-- ===================== TROUBLE ===================== -->
+<h2 id="trouble">Help</h2>
+<p>Type the error you are seeing.</p>
+<input id="tsearch" placeholder="paste your error, or a word from it…" autocomplete="off">
+
+<table id="ttable">
+  <tr><th>What you see</th><th>Why</th><th>Fix</th></tr>
+
+  <tr><td><code>Permission denied</code> on push</td>
+      <td>You cloned the original repo, not your fork</td>
+      <td><code>git remote set-url origin https://github.com/{{user}}/git-started.git</code></td></tr>
+
+  <tr><td><code>Permission denied</code> in Phase 3</td>
+      <td>You have not accepted the collaborator invitation</td>
+      <td><code>gh api user/repository_invitations</code> then
+          <code>gh api -X PATCH user/repository_invitations/ID</code></td></tr>
+
+  <tr><td><code>'add.' is not a git command</code></td>
+      <td>Missing space</td>
+      <td><code>git add .</code> with a space, or name the file directly</td></tr>
+
+  <tr><td><code>unknown command "accept" for "gh repo"</code></td>
+      <td><code>gh repo accept</code> does not exist</td>
+      <td>Use <code>gh api user/repository_invitations</code>, or accept in the browser</td></tr>
+
+  <tr><td><code>fatal: not a git repository</code></td>
+      <td>You are not inside the project folder</td>
+      <td><code>cd</code> into it. <code>pwd</code> shows where you are.</td></tr>
+
+  <tr><td><code>error: pathspec did not match</code></td>
+      <td>Forgot <code>-c</code> or <code>-b</code>, so git looked for an existing branch</td>
+      <td><code>git switch -c add-{{name}}</code></td></tr>
+
+  <tr><td>PR opened against your own fork</td>
+      <td>Forgot <code>--repo</code> in Phase 2</td>
+      <td><code>gh pr create --repo accelerate-muj/git-started</code></td></tr>
+
+  <tr><td><code>remote upstream already exists</code></td>
+      <td>You added it twice</td>
+      <td>Harmless. Ignore it, or <code>git remote remove upstream</code> and re-add.</td></tr>
+
+  <tr><td><code>! [rejected] main -> main</code></td>
+      <td>Somebody pushed before you</td>
+      <td><code>git pull origin main</code> then push again</td></tr>
+
+  <tr><td><code>CONFLICT (content): Merge conflict in ...</code></td>
+      <td>Two people changed the same lines. Expected in Phase 3.</td>
+      <td>Edit the file, keep both, delete the marker lines, <code>git add .</code>, commit</td></tr>
+
+  <tr><td>Leftover <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> in the file</td>
+      <td>You missed a marker when resolving</td>
+      <td>Search the file for <code>&lt;&lt;&lt;</code> and delete every marker line</td></tr>
+
+  <tr><td><code>refusing to merge unrelated histories</code></td>
+      <td>The two histories share no common commit</td>
+      <td><code>git pull origin main --allow-unrelated-histories</code></td></tr>
+
+  <tr><td>"There isn't anything to compare"</td>
+      <td>You committed to <code>main</code> instead of your branch</td>
+      <td><code>git switch -c add-{{name}}</code> then push that</td></tr>
+
+  <tr><td><code>gh pr merge</code> fails</td>
+      <td>The PR still has conflicts</td>
+      <td>The author resolves them first, then merge</td></tr>
+
+  <tr><td>Git asks for a password and rejects it</td>
+      <td>GitHub removed password auth for git in 2021</td>
+      <td><code>gh auth login</code> again, say <strong>yes</strong> to the git credentials question</td></tr>
+
+  <tr><td><code>gh: command not found</code></td>
+      <td>Your terminal cached the old PATH</td>
+      <td>Close the terminal and open a new one</td></tr>
+
+  <tr><td>Stuck in a text editor you cannot exit</td>
+      <td>It is vim</td>
+      <td>Press <code>Esc</code>, then type <code>:wq</code> and Enter</td></tr>
+
+  <tr><td>You want to undo the merge and start over</td>
+      <td>Nothing is lost. Ever.</td>
+      <td><code>git merge --abort</code></td></tr>
+</table>
+
+<div class="note" style="margin-top:20px">
+  <b>Nothing here matches?</b>
+  Run <code>git status</code>. It tells you where you are and what git thinks is
+  going on, and it is impossible to break anything with it. Then put your hand up.
+</div>
+
+<footer>
+  Accelerate &middot; Manipal University Jaipur &middot;
+  <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">github.com/accelerate-muj/git-started</a><br>
+  Going further after today: the <strong>Rabbit Holes</strong> handbook, thirteen
+  phases starting where this one stops.
+</footer>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+const FIELDS = {user:"f-user", name:"f-name", team:"f-team", leader:"f-leader"};
+const FALLBACK = {user:"your-username", name:"your-name", team:"team-name",
+                  leader:"leader-username"};
+
+function details(){
+  const d = {};
+  for (const k in FIELDS){
+    d[k] = (localStorage.getItem("gs_" + k) || "").trim();
+  }
+  return d;
+}
+
+/* Fill {{tokens}} in every command and inline example. */
+function substitute(){
+  const d = details();
+  const swap = text => text.replace(/\{\{(\w+)\}\}/g, (_, k) =>
+    d[k] || FALLBACK[k] || ("{{" + k + "}}"));
+
+  $$("pre[data-cmd]").forEach(pre => {
+    const raw = pre.dataset.cmd;
+    const filled = swap(raw);
+    pre.textContent = filled;
+    // Mark placeholders that are still unfilled, so they are obvious on screen.
+    if (/\{\{|your-username|your-name|team-name|leader-username|TEAMMATE-USERNAME|INVITATION-ID|PR-NUMBER/.test(filled))
+      pre.dataset.todo = "1"; else delete pre.dataset.todo;
+  });
+
+  $$("[data-tpl]").forEach(el => { el.textContent = swap(el.dataset.tpl); });
+
+  // Anything left as a raw token in prose or the help table.
+  $$(".tok, #ttable code, .out").forEach(el => {
+    if (!el.dataset.orig) el.dataset.orig = el.textContent;
+    el.textContent = swap(el.dataset.orig);
+  });
+
+  const missing = !d.user;
+  $("#setupbtn").classList.toggle("warn", missing);
+  $("#setupbtn").textContent = missing ? "Your details" : (d.user);
+}
+
+/* ---------- details panel ---------- */
+for (const k in FIELDS){
+  const input = document.getElementById(FIELDS[k]);
+  input.value = localStorage.getItem("gs_" + k) || "";
+  input.addEventListener("input", () => {
+    localStorage.setItem("gs_" + k, input.value.trim());
+    // Typing a username with nothing in the short-name box fills that in too.
+    // It has to be written to storage as well as the box, because substitute()
+    // reads storage; setting only the visible value left every command saying
+    // "your-name" while the field on screen looked correctly filled in.
+    if (k === "user" && !document.getElementById(FIELDS.name).dataset.touched){
+      const n = document.getElementById(FIELDS.name);
+      n.value = input.value.trim();
+      localStorage.setItem("gs_name", input.value.trim());
+    }
+    if (k === "name") input.dataset.touched = "1";
+    substitute();
+  });
+}
+$("#setupbtn").onclick = () => {
+  $("#setup").classList.toggle("on");
+  if ($("#setup").classList.contains("on")) $("#f-user").focus();
+};
+if (!localStorage.getItem("gs_user")) $("#setup").classList.add("on");
+
+/* ---------- copy ---------- */
+function toast(text){
+  const t = $("#toast");
+  t.textContent = text;
+  t.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("on"), 1600);
+}
+
+$$(".cmd .cp").forEach(btn => {
+  btn.onclick = async () => {
+    const pre = btn.parentElement.querySelector("pre");
+    try { await navigator.clipboard.writeText(pre.textContent); }
+    catch {
+      const r = document.createRange();
+      r.selectNode(pre);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+      document.execCommand("copy");
+      getSelection().removeAllRanges();
+    }
+    btn.textContent = "copied";
+    btn.classList.add("done");
+    setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("done"); }, 1400);
+    if (pre.dataset.todo)
+      toast("Copied, but it still has a placeholder to replace.");
+  };
+});
+
+/* ---------- help search ---------- */
+$("#tsearch").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase().trim();
+  const rows = $$("#ttable tr");
+  rows.forEach((row, i) => {
+    if (i === 0) return;                       // header
+    row.classList.toggle("hide", q && !row.textContent.toLowerCase().includes(q));
+  });
+});
+
+/* ---------- which phase am I in ---------- */
+const marks = ["phase1", "phase2", "phase3", "trouble"];
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    $$(".tab").forEach(t => t.classList.toggle("on",
+      t.getAttribute("href") === "#" + en.target.id));
+  });
+}, {rootMargin: "-120px 0px -70% 0px"});
+marks.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+
+substitute();
+</script>
+</body>
+</html>
