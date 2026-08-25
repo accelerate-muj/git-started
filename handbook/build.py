@@ -21,7 +21,9 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).parent / "src"
-OUT = Path(__file__).parent / "pdf"
+# Built into docs/, so GitHub Pages serves them at a real URL and the
+# split-screen handbook can link straight to a phase.
+OUT = Path(__file__).parent.parent / "docs" / "handbook"
 JUNK = (".aux", ".log", ".out", ".toc", ".synctex.gz", ".fls", ".fdb_latexmk")
 
 
@@ -92,7 +94,7 @@ def build(tex: Path, xelatex: str) -> bool:
         print("  FAILED: no PDF produced")
         return False
 
-    OUT.mkdir(exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
     dest = OUT / pdf.name
     shutil.move(str(pdf), str(dest))
 
@@ -103,7 +105,7 @@ def build(tex: Path, xelatex: str) -> bool:
         if m:
             pages = m.group(1)
     size = dest.stat().st_size / 1024
-    print(f"  OK  {pages} pages, {size:.0f} KB  ->  pdf/{dest.name}")
+    print(f"  OK  {pages} pages, {size:.0f} KB  ->  docs/handbook/{dest.name}")
     return True
 
 

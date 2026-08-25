@@ -143,6 +143,24 @@
   #tsearch:focus{border-color:var(--red)}
   tr.hide{display:none}
 
+
+  /* ---------- next phase ---------- */
+  .next-hero{display:flex;gap:16px;align-items:flex-start;background:var(--card);
+    border:1.5px solid var(--border);border-left:3px solid var(--red);
+    border-radius:0 9px 9px 0;padding:18px 20px;margin:18px 0}
+  .nh-num{font-family:var(--sans);font-size:44px;font-weight:600;line-height:.9;
+    color:var(--red);opacity:.28;flex-shrink:0}
+  .nh-body{flex:1;min-width:0}
+  .nh-title{font-family:var(--sans);font-size:19px;font-weight:600;
+    color:var(--red);text-decoration:none;display:inline-block;margin-bottom:5px}
+  .nh-title:hover{text-decoration:underline}
+  .nh-sub{margin:0 0 9px;font-size:15.5px}
+  .nh-why{margin:0;font-size:14.5px;color:rgba(33,29,22,.68);font-style:italic}
+  @media(max-width:620px){
+    .next-hero{padding:14px 15px;gap:12px}
+    .nh-num{font-size:34px}
+  }
+
   /* ---------- misc ---------- */
   .check{background:var(--card);border:1.5px solid var(--border);border-radius:8px;
     padding:14px 16px;margin:18px 0}
@@ -175,6 +193,7 @@
       <a class="tab" href="#phase2">2 &middot; Fork &amp; PR</a>
       <a class="tab" href="#phase3">3 &middot; Conflicts</a>
       <a class="tab" href="#trouble">Help</a>
+      <a class="tab" href="#next">Next</a>
     </nav>
     <button id="setupbtn">Your details</button>
   </div>
@@ -857,11 +876,71 @@ git log --oneline --graph --all"></pre><button class="cp">copy</button></div>
   going on, and it is impossible to break anything with it. Then put your hand up.
 </div>
 
+<!-- ===================== NEXT ===================== -->
+<h2 id="next">Phase 4 and onwards</h2>
+
+<p>Today stops here. The handbook does not.</p>
+
+<p><strong>Rabbit Holes</strong> picks up at Phase 4 and runs to Phase 16. About
+120 pages, one PDF per phase, so you can take one and ignore the rest.</p>
+
+<div class="next-hero">
+  <div class="nh-num">4</div>
+  <div class="nh-body">
+    <a class="nh-title" href="handbook/phase-04-undo.pdf">Undo &rarr;</a>
+    <p class="nh-sub">Every way to take something back. <code>restore</code>, the
+    three modes of <code>reset</code>, <code>revert</code>, <code>reflog</code>,
+    <code>stash</code>, and the only two commands that genuinely destroy work.</p>
+    <p class="nh-why">Start here. Most people are scared of git because they think
+    a wrong command loses work. It almost never does, and this is the phase that
+    proves it. Read it and you will stop being careful in the way that slows you
+    down.</p>
+  </div>
+</div>
+
+<details>
+<summary>The other twelve</summary>
+<div class="body">
+<table>
+  <tr><th></th><th>Phase</th><th>About</th></tr>
+  <tr><td><strong>5</strong></td><td><a href="handbook/phase-05-rewriting.pdf">Rewriting history</a></td>
+      <td>Interactive rebase, squashing, splitting one commit into two, cherry-pick, and removing a file from every commit that ever held it.</td></tr>
+  <tr><td><strong>6</strong></td><td><a href="handbook/phase-06-forensics.pdf">Forensics</a></td>
+      <td>Reading history instead of writing it. <code>blame</code> without the noise, and <code>bisect run</code> finding the commit that broke the build while you make tea.</td></tr>
+  <tr><td><strong>7</strong></td><td><a href="handbook/phase-07-merging.pdf">Merging deeply</a></td>
+      <td>What today's conflict actually was. Three-way merges, merge strategies, better conflict markers, and teaching git to resolve the same conflict once.</td></tr>
+  <tr><td><strong>8</strong></td><td><a href="handbook/phase-08-remotes.pdf">Remotes and big repos</a></td>
+      <td>Refspecs read aloud, worktrees, shallow and partial clones, submodules, LFS.</td></tr>
+  <tr><td><strong>9</strong></td><td><a href="handbook/phase-09-plumbing.pdf">Plumbing</a></td>
+      <td>What is actually inside <code>.git</code>. Why a commit is not a diff, and why a branch is 41 bytes. The one where it clicks.</td></tr>
+  <tr><td><strong>10</strong></td><td><a href="handbook/phase-10-trust.pdf">Trust</a></td>
+      <td>Anyone can commit under your name. Signing, what Verified really proves, releases, and the day somebody commits a password.</td></tr>
+  <tr><td><strong>11</strong></td><td><a href="handbook/phase-11-config.pdf">Config and automation</a></td>
+      <td>Aliases worth having, <code>.gitignore</code> versus <code>.gitattributes</code>, and hooks that stop a bad commit existing.</td></tr>
+  <tr><td><strong>12</strong></td><td><a href="handbook/phase-12-github.pdf">GitHub as a platform</a></td>
+      <td>Everything that is not git. Issues, templates, projects, pages, and a search syntax worth learning properly.</td></tr>
+  <tr><td><strong>13</strong></td><td><a href="handbook/phase-13-gh.pdf">The gh CLI in full</a></td>
+      <td>The whole command surface, and <code>gh api</code> for everything that has no command.</td></tr>
+  <tr><td><strong>14</strong></td><td><a href="handbook/phase-14-actions.pdf">Actions and CI/CD</a></td>
+      <td>Making the repo do the work. Also the two triggers that can hand your repository to a stranger.</td></tr>
+  <tr><td><strong>15</strong></td><td><a href="handbook/phase-15-maintainer.pdf">Being a maintainer</a></td>
+      <td>The longest, and the least about commands. Licensing, reviewing well, triage, saying no, burnout, succession.</td></tr>
+  <tr><td><strong>16</strong></td><td><a href="handbook/phase-16-scale.pdf">Scale and origins</a></td>
+      <td>Where git came from in ten days of 2005, and why that explains every strange part of it.</td></tr>
+</table>
+
+<p style="font-size:14.5px;color:rgba(33,29,22,.7)">If you are picking rather than
+reading in order: <strong>4</strong> if git frightens you, <strong>6</strong> when
+something broke and nobody knows when, <strong>9</strong> for the moment it all
+clicks, <strong>15</strong> if you have just inherited a repo.</p>
+</div>
+</details>
+
 <footer>
   Accelerate &middot; Manipal University Jaipur &middot;
   <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">github.com/accelerate-muj/git-started</a><br>
-  Going further after today: the <strong>Rabbit Holes</strong> handbook, thirteen
-  phases starting where this one stops.
+  Corrections are the most useful thing this page can get. A command that does not
+  work on your machine wastes thirty people's time at once, so please open an issue.
 </footer>
 
 </main>
@@ -977,7 +1056,7 @@ $("#tsearch").addEventListener("input", e => {
 });
 
 /* ---------- which phase am I in ---------- */
-const marks = ["phase1", "phase2", "phase3", "trouble"];
+const marks = ["phase1", "phase2", "phase3", "trouble", "next"];
 const obs = new IntersectionObserver(entries => {
   entries.forEach(en => {
     if (!en.isIntersecting) return;
