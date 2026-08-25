@@ -245,8 +245,20 @@ def qr_ascii(url: str) -> str:
     return "\n".join(rows)
 
 
-def make_app(room: Room, host_key: str, join_url: str) -> FastAPI:
+def make_app(room: Room, host_key: str, port: int,
+             fixed_ip: str | None = None) -> FastAPI:
     app = FastAPI(title="Chaos Draft")
+
+    def current_join_url() -> str:
+        """
+        Worked out fresh on every request, never cached.
+
+        Moving between wifi and a phone hotspot changes this machine's address.
+        If the QR were built once at startup it would keep pointing at the old
+        one, and the failure is silent: firewall fine, server fine, nothing
+        connects. Recomputing means refreshing the QR is always enough.
+        """
+        return f"http://{fixed_ip or lan_ip()}:{port}"
 
     @app.get("/")
     async def index():
@@ -258,12 +270,14 @@ def make_app(room: Room, host_key: str, join_url: str) -> FastAPI:
 
     @app.get("/join-url", response_class=PlainTextResponse)
     async def join():
-        return join_url
+        return current_join_url()
 
     @app.get("/qr.svg")
     async def qr():
         try:
-            return Response(qr_svg(join_url), media_type="image/svg+xml")
+            return Response(qr_svg(current_join_url()),
+                            media_type="image/svg+xml",
+                            headers={"Cache-Control": "no-store"})
         except Exception:
             return Response("", media_type="image/svg+xml")
 
@@ -378,7 +392,7 @@ def main() -> None:
     host_key, key_origin = host_key_for_run(args.host_key, args.new_key)
     ip = args.ip or lan_ip()
     join_url = f"http://{ip}:{args.port}"
-    app = make_app(room, host_key, join_url)
+    app = make_app(room, host_key, args.port, args.ip)
 
     d = room.dictionary
     print()
@@ -394,7 +408,8 @@ def main() -> None:
     print(f"                                  ^ yours only, {key_origin}.")
     print("                                  Do not put it on the projector.")
     print()
-    print("  The join QR is on the page too, under the QR button.")
+    print("  The join QR is on the page too, under the QR button. It is rebuilt")
+    print("  on every open, so if you switch to a hotspot just reopen it.")
     print("  Edit wordlist.txt during the session and it applies immediately.")
     print()
 
