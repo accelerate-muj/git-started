@@ -251,12 +251,14 @@ class Dictionary:
         self.allow: set[str] = set()
         self.exact: set[str] = set()
         self.contains: list[str] = []
+        self.phrases: list[list[str]] = []
         self.fuzzy_targets: list[str] = []
         self._mtime = 0.0
         self.load()
 
     def load(self) -> None:
         buckets: dict[str, set[str]] = {"allow": set(), "exact": set(), "contains": set()}
+        phrases: list[list[str]] = []
         section = "exact"
 
         text = self.path.read_text(encoding="utf-8") if self.path.exists() else ""
@@ -266,15 +268,23 @@ class Dictionary:
                 continue
             if line.startswith("[") and line.endswith("]"):
                 name = line[1:-1].strip().lower()
-                if name in buckets:
+                if name in buckets or name == "phrases":
                     section = name
                 continue
+            if section == "phrases":
+                words = [(normalise(w) or [""])[0] for w in line.split()]
+                words = [w for w in words if w]
+                if len(words) > 1:
+                    phrases.append(words)
+                continue
+
             forms = allowable(line) if section == "allow" else indexable(line)
             for form in forms:
                 buckets[section].add(form)
 
         self.allow = buckets["allow"]
         self.exact = buckets["exact"]
+        self.phrases = phrases
         self.contains = sorted(buckets["contains"], key=len, reverse=True)
 
         # Only reasonably long terms are worth fuzzy-matching against, and only
@@ -299,6 +309,59 @@ class Dictionary:
             self.load()
             return True
         return False
+
+    def scan(self, text: str) -> list[tuple[int, int, str]]:
+        """
+        Find every span of `text` that has to be removed, as (start, end, why).
+
+        Works on the raw string and returns real character offsets, so a caller
+        editing a live document can delete exactly those ranges and leave
+        everything else untouched.
+
+        Two passes, because two different things go wrong:
+
+        1. Single words. The ordinary case.
+        2. Phrases. Individually innocent words that are abuse in sequence. The
+           one that prompted this: "behen ke lode". "behen" means sister and is
+           allowlisted, "ke" is a postposition, and only the third word is
+           blockable. Removing just that word leaves "behen ke" sitting in the
+           document reading exactly like what it is.
+        """
+        spans: list[tuple[int, int, str]] = []
+
+        # Token positions in the original string.
+        tokens = [(m.start(), m.end(), m.group()) for m in re.finditer(r"\S+", text)]
+        if not tokens:
+            return spans
+
+        for start, end, tok in tokens:
+            if self.check(tok).decision is not Decision.ALLOW:
+                spans.append((start, end, tok))
+
+        if self.phrases:
+            # One normalised word per token, for sequence matching.
+            keys = [(normalise(t) or [""])[0] for _, _, t in tokens]
+            n = len(keys)
+            for phrase in self.phrases:
+                plen = len(phrase)
+                for i in range(n - plen + 1):
+                    if keys[i:i + plen] == phrase:
+                        spans.append((tokens[i][0], tokens[i + plen - 1][1],
+                                      " ".join(phrase)))
+
+        if not spans:
+            return spans
+
+        # Merge overlaps, so a phrase and a word inside it become one deletion.
+        spans.sort()
+        merged = [spans[0]]
+        for start, end, why in spans[1:]:
+            last_start, last_end, last_why = merged[-1]
+            if start <= last_end:
+                merged[-1] = (last_start, max(last_end, end), last_why)
+            else:
+                merged.append((start, end, why))
+        return merged
 
     def check(self, word: str) -> Verdict:
         start = time.perf_counter_ns()

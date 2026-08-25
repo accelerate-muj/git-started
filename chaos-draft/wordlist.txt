@@ -943,3 +943,59 @@ lawdelelo
 jhaatumar
 gaandufakir
 
+
+
+# ===========================================================================
+[phrases]
+# ===========================================================================
+# Sequences of words that are abuse together but innocent apart. This section
+# exists because of "behen ke lode": "behen" means sister and is allowlisted,
+# "ke" is a postposition, and only the last word is blockable. Removing that one
+# word left "behen ke" sitting in the document, reading exactly like what it is.
+#
+# One phrase per line, words separated by spaces. Each word is normalised the
+# same way as everything else, so spelling variants are handled for free and you
+# do not need to list them.
+#
+# Only put things here that are genuinely harmless word by word. Anything with a
+# blockable word in it is already caught by [exact] or [contains].
+
+behen ke
+bahan ke
+bhen ke
+behen ki
+bahan ki
+behan ke
+teri behen
+teri bahan
+teri maa
+teri ma
+teri mummy
+teri behen ki
+teri maa ki
+teri maa ka
+maa ki
+maa ka
+maa ke
+tere baap
+tera baap
+teri aunty
+apni maa
+apni behen
+meri gaand
+tumhari maa
+tumhari behen
+maa chuda
+maa chudi
+behen chod
+bahan chod
+madar chod
+mother fucker
+mother fuckers
+son of a bitch
+gaand mein
+gand mein
+gaand mar
+gand mar
+lund choos
+lauda lehsun

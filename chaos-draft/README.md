@@ -2,34 +2,30 @@
 
 The warm-up activity, run in the fifteen minutes before the git workshop starts.
 
-Everyone writes one story together, at the same time, in one shared document.
-It falls apart almost immediately, which is the point.
+One page. Everybody types into it at the same time, like a shared document. It
+falls apart almost immediately, which is the point.
 
-It runs on one laptop. Everyone joins over the room wifi. Nothing leaves the
-network and nobody makes an account.
+It runs on one laptop. Everyone joins over wifi or a phone hotspot. Nothing leaves
+the network and nobody makes an account.
 
 ---
 
 ## The activity
 
-1. The host starts the server and shows the QR on the projector.
-2. Everyone scans it, types a name, and gets a line of their own in the document.
-3. Write. Whole sentences, backspace, edit what you wrote a minute ago. It is a
-   normal text editor.
-4. Press Enter to start another line. Everyone sees everyone else's lines appear
-   and change live.
-5. After ten minutes, read the result out loud.
+1. Start the server and put the QR on the projector.
+2. Everyone scans it and types a name.
+3. Write. Anywhere on the page, at the same time as everyone else. Whole
+   sentences, backspace, go back and change what somebody wrote a minute ago.
+4. After ten minutes, read the result out loud.
 
-There is no turn order and no plan. Two people will steer the story in opposite
-directions at the same time, and that is the entire joke.
+There is no turn order, no ownership and no plan. Two people will steer the story
+in opposite directions in the same paragraph, and that is the entire joke.
 
-Lines are owned by whoever created them, so nobody can delete your sentence while
-you are halfway through it. The document still fills up chaotically, which is the
-part we actually wanted.
+A filter removes anything inappropriate before it reaches the page, in English and
+Hindi. Participants do not need to think about it. Everyone sees a counter of how
+many words were removed, but never which ones.
 
-A filter checks every word before anyone else sees it and removes anything
-inappropriate, in English and Hindi. Participants do not need to think about it.
-Everyone sees a counter of how many words were removed, but never which ones.
+---
 
 ## Running it
 
@@ -45,198 +41,208 @@ pip install -r requirements.txt
 python server.py
 ```
 
-The server prints two addresses:
+It prints a QR code in the terminal and two links:
 
 ```
-  Everyone opens:   http://192.168.1.42:8000
-  Host controls:    http://192.168.1.42:8000/?key=XXXXXXXXXXXX
-                    ^ yours only. Do not put this on the projector.
+  Everyone scans that, or opens:  http://10.44.201.78:8000
+  Your host link:                 http://10.44.201.78:8000/?key=XXXXXXXXXXXX
+                                  ^ yours only.
 ```
 
-Put the **first** on the projector. Open the **second** yourself.
-
-The second one is the same page plus the controls that let you remove words and
-wipe the story.
-
-The key is generated the first time you run the server and saved to `.host-key`,
-so **your host URL is the same every time**, including after a restart mid-session.
-It is printed only in your own terminal, and `.host-key` is gitignored so it never
-reaches the repository.
-
-There is no fixed default, deliberately. This repository is public, so any key
-written down here would be a key everyone in the room already has, and the host
-controls include wiping the story for all thirty of them.
-
-Keep that URL to yourself. If it leaks:
-
-```bash
-python server.py --new-key
-```
+Show the QR, or the first link. Open the second one yourself.
 
 Needs Python 3.9 or newer.
 
-### Host controls
+### Running off a phone hotspot
 
-| Button | Does |
-|---|---|
-| **Copy story** | Puts the whole story on your clipboard. Also at `/story.txt`. |
-| **Undo** | Removes the last word. |
-| **Reset** | Clears everything and starts over. |
+Usually easier than campus wifi, which often isolates devices from each other so
+they cannot see the laptop at all.
 
-### Options
+1. Turn on the hotspot, connect the laptop to it.
+2. Start the server. It picks up the hotspot address by itself.
+3. Show the QR. Everyone joins the same hotspot and scans.
 
-```bash
-python server.py --cooldown 0
-```
-
-How many seconds each person waits between words. Defaults to 1. Set it to `0` for
-genuine chaos, or raise it if two fast typists are drowning everyone else out.
+If the printed address looks wrong, override it:
 
 ```bash
-python server.py --port 8080
+python server.py --ip 192.168.43.1
 ```
 
-```bash
-python server.py --host-key your-own-secret
-```
+### The host link
 
-Pins a key you choose, instead of the saved random one. Do not pick something
-guessable.
+The key is generated on first run and saved to `.host-key`, so **your host link is
+the same every time**, including after a restart mid-session. It is printed only in
+your terminal, and `.host-key` is gitignored so it never reaches the repository.
+
+There is no fixed default, deliberately. This repository is public, so any key
+written down here would be a key everyone in the room already has, and the host
+controls include wiping the page.
+
+If it leaks:
 
 ```bash
 python server.py --new-key
 ```
 
-Discards the saved key and generates a new one. Use this if your host URL leaks.
+### What the host gets
+
+| | |
+|---|---|
+| **Stopped by the filter** | A live list of what the filter removed, and who typed it. Nobody else sees this. |
+| **Block a word** | Type a word, press Add. It is removed from the page immediately and blocked for the rest of the session. |
+| **Reset** | Clears the page for everyone. |
+| **Copy** | The whole page to your clipboard. Also at `/story.txt`. |
+
+---
+
+## How the shared page works
+
+One string on the server, and operational transform to keep everyone agreed on it.
+See `ot.py`.
+
+Every edit you make is sent as "at position 12, delete 3 characters, insert this
+text", along with the version you last saw. The server adjusts it for anything
+that landed in the meantime, applies it, and tells everyone. That adjustment is
+the whole of collaborative editing:
+
+> Alice edits at position 10 and Bob at position 3, both against version 7. Bob
+> lands first and inserts 5 characters. Alice's edit now has to move to position
+> 15 or it lands in the wrong place.
+
+Verified converging: two people typing at opposite ends of the page at the same
+instant, and all three copies, both browsers and the server, ended up identical
+with neither edit lost.
+
+If a client ever does drift, it notices the length disagrees and asks for the
+whole page again. That is the safety net under all of it.
 
 ---
 
 ## How the filtering works
 
-Three layers, and only the first one runs while people are typing.
+**A dictionary lookup, and nothing slower.** After every edit the page is scanned
+and anything blocked is deleted, as an ordinary edit that everyone receives. So a
+word disappears mid-sentence as you finish typing it, for you and the room at the
+same instant.
 
-**1. Dictionary.** A list of terms to block, in English, Hindi, Devanagari and
-eight other Indian languages. Words are normalised before lookup, so spacing,
-punctuation, number substitutions, stretched letters and alternative spellings all
-collapse onto the same entry. If a word is not an exact match but is very close to
-one, it still goes up but is underlined for the host.
+Terms are normalised before lookup, so spacing, punctuation, number substitutions,
+stretched letters, long-vowel spellings and aspirated consonants all collapse onto
+one entry. The dictionary carries one line instead of forty.
 
-This is the whole runtime path. Measured end to end, browser to server and back,
-firing words as fast as a machine can send them: **median 14 ms, worst case 19 ms.**
+**Phrases too.** Some abuse is innocent word by word. `behen ke lode` is the
+reason this exists: `behen` means sister and is protected, `ke` is a postposition,
+and only the last word is blockable. Removing just that word left the rest of the
+phrase sitting on the page reading exactly like what it is.
 
-**2. You.** Click any underlined word, or any word at all, to remove it. It is also
-written into the dictionary, so it is caught instantly from then on.
+**Near misses count.** A deliberate misspelling that is one or two edits away from
+a blocked term is removed too. An earlier version merely underlined those, which
+was wrong: underlining a slur is not filtering it.
 
-**3. A model, before the session.** `expand.py` uses a local language model to
-propose new dictionary entries, which you approve one at a time. It runs beforehand,
-never during.
+### How well it works
 
-### Why the model does not run during the session
+| | Result |
+|---|---|
+| Labelled cases correct | 279 / 279 |
+| Let something through | 0 |
+| Blocked an ordinary word | 0 |
+| Phrase cases correct | 10 / 10 |
+| Ordinary vocabulary damaged | 0 of 927 |
+| Speed | tens of thousands of words per second |
 
-It used to. It was measured and removed.
+The last two rows matter as much as the first. A filter that eats `class`,
+`coming` or an ordinary Hindi word stops the activity dead, so the dictionary is
+checked against a corpus of common English and Hindi vocabulary on every change.
+
+### Adding a term mid-session
+
+Easiest: type it into **Block a word** in the host sidebar.
+
+Permanently: add it to `wordlist.txt` under `[exact]`, or under `[phrases]` if it
+is only abusive as a sequence, and save. The server reloads it on the next edit.
+No restart, nobody disconnected.
+
+After editing, always:
+
+```bash
+python filter.py --collisions
+```
+
+---
+
+## Testing
+
+```bash
+python test_filter.py
+```
+
+The one to run. Checks the dictionary against the labelled cases in
+`test_cases.txt`, checks the phrases, and checks nothing ordinary is damaged.
+Takes a fraction of a second, needs nothing installed, exits non-zero on failure
+so it works in CI.
+
+Add your own cases to `test_cases.txt` using `[block:name]` and `[allow:name]`
+headings.
+
+```bash
+python filter.py
+```
+
+Shows what the dictionary does with sample inputs, and how long it takes.
+
+---
+
+## The model, and why it is not in the live path
+
+There was one. It was measured and removed.
 
 The best local model tested answered in about 750 ms per word, warm and idle. With
-thirty people typing that becomes a queue, on the same laptop that is also serving
-all of them, with a multi-gigabyte model sitting in RAM.
+thirty people typing that becomes a queue, on the same laptop serving all of them,
+with a multi-gigabyte model resident in RAM.
 
-It also was not earning its place. On a 250-word labelled test set:
+It also was not earning its place:
 
 | | Dictionary | Model |
 |---|---|---|
 | Correct | 250 / 250 | 228 / 250 |
 | Let something through | 0 | 15 |
 | Blocked an ordinary word | 0 | 7 |
-| Time per word | under 0.03 ms | ~750 ms |
 
-The model missed every regional-language term it was shown, and wanted to block
-`kill`, `die` and `niggle`. In a story-writing game, deleting somebody's ordinary
-word is worse than missing a rare one.
+It missed every regional-language term it was shown, and wanted to block `kill`
+and `die`. In a story game, deleting somebody's ordinary word is worse than
+missing a rare one.
 
-So the model now does its work in advance, where being slow costs nobody anything,
-and everything it finds becomes a dictionary entry that costs microseconds at run
-time.
+So it now runs **before** the session, where slow is free, and everything it finds
+becomes a dictionary entry that costs microseconds live:
 
 ```bash
 python expand.py --seed <a term already blocked>
 ```
 
-It proposes spellings and variants, discards anything already covered or that would
-clash with ordinary vocabulary, and asks you before writing anything.
-
-### Adding a term mid-session
-
-Open `wordlist.txt`, add the term under `[exact]`, and save. The server notices the
-file changed and picks it up on the next word. No restart, nobody disconnected.
-
-After editing, run the safety check:
-
-```bash
-python filter.py --collisions
-```
-
-This verifies that nothing in the dictionary accidentally blocks an ordinary word.
-That failure matters more than it sounds: a filter that eats `class`, `pass` or
-`coming` stops the activity dead. The check runs against a corpus of common English
-and Hindi vocabulary and must report no collisions.
-
-### How well it works
-
-Tested against a labelled set of 250 words, half of which should be blocked and
-half of which are ordinary English and Hindi vocabulary:
-
-| | Result |
-|---|---|
-| Dictionary, correct | 250 / 250 |
-| Let something through | 0 |
-| Blocked an ordinary word | 0 |
-| Speed | over 40,000 words per second |
-
-The second number matters more than the first. A filter that eats `class`, `pass`
-or `coming` stops the activity dead, so the dictionary is checked against a corpus
-of common vocabulary on every change and must never touch any of it.
-
-### Testing
-
-```bash
-python test_filter.py
-```
-
-The one to run. Checks the dictionary against 250 labelled cases in
-`test_cases.txt`, then checks it does not touch ordinary vocabulary. Takes a
-fraction of a second, needs nothing installed, and exits non-zero if anything is
-wrong, so it works in CI.
-
-Add your own cases to `test_cases.txt`. The format is `[block:name]` and
-`[allow:name]` headings with words underneath.
-
-```bash
-python test_filter.py --ai
-```
-
-Also measures the model. Slow, and only relevant if you are changing `expand.py`.
+It proposes spellings and variants, discards anything already covered or that
+would clash with ordinary vocabulary, and asks you before writing anything.
 
 ---
 
 ## Troubleshooting
 
-**Nobody else can connect.** Almost always the firewall. Windows shows a dialog the
-first time you run it, and it is easy to dismiss by accident. Allow Python on
-Private networks, or:
+**Nobody else can connect.** Almost always the firewall. Windows shows a dialog
+the first time and it is easy to dismiss. Allow Python on Private networks, or run
+this in an Administrator terminal:
 
 ```bash
 netsh advfirewall firewall add rule name="Chaos Draft" dir=in action=allow protocol=TCP localport=8000
 ```
 
-**Campus wifi blocks device-to-device traffic.** Some networks isolate clients from
-each other, and no firewall change will help. Test with one phone before the
-session. If it fails, a phone hotspot handles thirty people fine.
+**Campus wifi blocks device-to-device traffic.** Some networks isolate clients and
+no firewall change helps. Use a phone hotspot. Test with one phone before the
+session either way.
 
-**The address is wrong.** The server guesses your network address and can pick the
-wrong adapter if you have a VPN or virtual machines. Get the right one with
-`ipconfig` on Windows or `ip addr` elsewhere, and hand that out on the same port.
+**The address is wrong.** The server guesses, and can pick the wrong adapter if
+you have a VPN or virtual machines. Get the right one with `ipconfig` and pass
+`--ip`.
 
-**It says reconnecting.** The page reconnects on its own when wifi drops. The story
-lives on the server, so nothing is lost.
+**It says reconnecting.** It reconnects on its own and resyncs. The page lives on
+the server, so nothing is lost.
 
 ---
 
@@ -244,11 +250,12 @@ lives on the server, so nothing is lost.
 
 | File | What |
 |---|---|
-| `server.py` | The server. Room state, host controls, connections. |
+| `server.py` | The server. Shared document, filtering, host controls. |
+| `ot.py` | Operational transform. How thirty people edit one string. |
 | `filter.py` | The filtering logic. Run it directly to test. |
-| `wordlist.txt` | The terms to block, and the ordinary words to protect. |
-| `safe_words.txt` | Vocabulary used by the collision check. Not used at runtime. |
-| `expand.py` | Grows the dictionary before a session, using a model, with your approval. |
-| `test_filter.py` | Tests the filter. Run this after any change to the dictionary. |
+| `wordlist.txt` | Terms to block, phrases to block, ordinary words to protect. |
+| `safe_words.txt` | Vocabulary the collision check runs against. Not used live. |
+| `test_filter.py` | Tests. Run after any change to the dictionary. |
 | `test_cases.txt` | The labelled cases it tests against. |
+| `expand.py` | Grows the dictionary before a session, with your approval. |
 | `static/index.html` | The whole page. No build step, no dependencies. |

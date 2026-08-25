@@ -116,6 +116,42 @@ def test_dictionary(d: Dictionary, cases: list) -> int:
     return len(missed) + len(overblocked)
 
 
+# Phrases are checked on whole sentences, because that is the failure they exist
+# for: every word innocent on its own, abuse in sequence.
+PHRASE_CASES = [
+    # (sentence, must the scan remove something)
+    ("behen ke lode you idiot", True),
+    ("behen ke", True),
+    ("teri maa ki aankh", True),
+    ("madar chod", True),
+    ("mother fucker", True),
+    ("my behen is a doctor", False),
+    ("she is my bahan and I love her", False),
+    ("the wizard opened the door", False),
+    ("But the chudail was already waiting there, laughing in the dark.", False),
+    ("teri shirt is nice", False),
+]
+
+
+def test_phrases(d: Dictionary) -> int:
+    """Sequences that are innocent word by word."""
+    wrong = []
+    for sentence, should_remove in PHRASE_CASES:
+        spans = d.scan(sentence)
+        if bool(spans) != should_remove:
+            wrong.append((sentence, should_remove, [w for _, _, w in spans]))
+
+    print("\n" + "=" * 70)
+    print("  PHRASES")
+    print("=" * 70)
+    print(f"  {len(d.phrases)} phrases loaded")
+    print(f"  correct   {len(PHRASE_CASES) - len(wrong)}/{len(PHRASE_CASES)}")
+    for sentence, expected, got in wrong:
+        want = "should have been cleaned" if expected else "should have been left alone"
+        print(f"    {sentence!r}  {want}, got {got}")
+    return len(wrong)
+
+
 def test_collisions(d: Dictionary) -> int:
     """The dictionary must not touch ordinary vocabulary."""
     bad = collision_audit(d)
@@ -202,7 +238,8 @@ async def main() -> None:
           f"{blocked} must be blocked, {len(cases) - blocked} must be allowed")
 
     d = Dictionary()
-    failures = test_dictionary(d, cases) + test_collisions(d)
+    failures = (test_dictionary(d, cases) + test_phrases(d)
+                + test_collisions(d))
 
     if args.ai or args.compare or args.model:
         from filter import Auditor
