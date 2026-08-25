@@ -335,15 +335,43 @@ def make_app(room: Room, host_key: str, port: int,
 
 
 def lan_ip() -> str:
-    """Best guess at the address other devices can reach, without sending traffic."""
+    """
+    The address other devices on this network can reach.
+
+    Asks the OS which interface it would use to leave the machine, which is the
+    one a phone on the same wifi or hotspot will be able to see. No traffic is
+    actually sent; connecting a UDP socket only sets up the route.
+
+    The target has to be a public address. An earlier version aimed at
+    10.255.255.255, which on a campus 10.x network resolves to the campus
+    interface even when a hotspot is also connected, so it kept reporting the
+    wrong one.
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s.connect(("10.255.255.255", 1))
+        s.connect(("8.8.8.8", 80))
         return s.getsockname()[0]
     except Exception:
-        return "127.0.0.1"
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
     finally:
         s.close()
+
+
+def all_ipv4() -> list[str]:
+    """Every address this machine has, so the host can pick if the guess is wrong."""
+    found = []
+    with suppress(Exception):
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            addr = info[4][0]
+            if addr not in found and not addr.startswith(("127.", "169.254.")):
+                found.append(addr)
+    primary = lan_ip()
+    if primary in found:
+        found.remove(primary)
+    return [primary] + found
 
 
 def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
@@ -403,7 +431,11 @@ def main() -> None:
     with suppress(Exception):
         print(qr_ascii(join_url))
         print()
+    others = [a for a in all_ipv4()[1:]]
     print(f"  Everyone scans that, or opens:  {join_url}")
+    if others:
+        print(f"  Other addresses on this machine: {', '.join(others)}")
+        print(f"  If the QR does not work, try one of those with --ip")
     print(f"  Your host link:                 {join_url}/?key={host_key}")
     print(f"                                  ^ yours only, {key_origin}.")
     print("                                  Do not put it on the projector.")
