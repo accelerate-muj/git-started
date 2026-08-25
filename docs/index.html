@@ -161,6 +161,25 @@
     .nh-num{font-size:34px}
   }
 
+
+  /* reference layout: terse */
+  .aim{font-family:var(--sans);font-size:13.5px;color:rgba(33,29,22,.6);
+    margin:2px 0 16px}
+  .step{border-left:2px solid var(--border);padding:2px 0 2px 14px;margin:16px 0}
+  .step:hover{border-left-color:var(--red)}
+  .step > .lbl{font-family:var(--sans);font-size:10px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.09em;color:rgba(33,29,22,.45);
+    display:block;margin-bottom:1px}
+  .step.host > .lbl{color:var(--red)}
+  .step h3{font-size:15px;margin:0 0 6px}
+  .tip{font-size:14.5px;color:rgba(33,29,22,.72);margin:6px 0 0}
+  .cmd{margin:8px 0}
+  .warn,.note{font-size:14.5px;padding:9px 12px;margin:10px 0}
+  table.flags{font-size:13.5px;margin:8px 0}
+  table.flags td{padding:5px 8px}
+  h2{margin:34px 0 2px}
+  #ttable td{font-size:13.5px}
+
   /* ---------- misc ---------- */
   .check{background:var(--card);border:1.5px solid var(--border);border-radius:8px;
     padding:14px 16px;margin:18px 0}
@@ -225,676 +244,281 @@
 </header>
 
 <main>
-
 <h1>git started</h1>
-<div class="sub">Accelerate workshop 3. Keep this on one half of your screen and your
-terminal on the other.</div>
+<div class="sub">Commands only. The explanations happen in the room. Keep this on
+half your screen, terminal on the other.</div>
 
 <div class="note">
-  <b>Before anything else</b>
-  Click <strong>Your details</strong> at the top and type your GitHub username.
-  Every command on this page will fill itself in. This is the single biggest
-  cause of wasted time in a workshop, and it takes ten seconds to remove.
+  <b>Do this first</b>
+  Hit <strong>Your details</strong> above and type your GitHub username. Every
+  command on this page fills itself in, so you can copy and run without editing.
 </div>
 
 
 <!-- ===================== PHASE 1 ===================== -->
 <h2 id="phase1"><span class="n">1</span> &nbsp;Your own repo</h2>
+<div class="aim">Local git, then push it to your profile.</div>
 
-<details open>
-<summary>First, why any of this exists</summary>
-<div class="body story">
-
-<p>You are writing a poem. You save it as <code>poems.txt</code>.</p>
-
-<p>You change a line. You want the old one back, just in case. So you save a
-copy. <code>poems_v2.txt</code>. Then <code>poems_final.txt</code>. Then
-<code>poems_final_ACTUAL.txt</code>.</p>
-
-<div class="beat">Another problem</div>
-<p>You save <code>Diff_file_0_file_1.txt</code>. You feel proud of yourself for
-a second.</p>
-<p>Now do it again for file_1 and file_2. And again for file_0 and file_2, just
-in case you need to compare those too.</p>
-<p>Three files. Three diffs. And you have barely started the poem.</p>
-<p>Now imagine this is not a poem. Imagine it is twenty files, for a real
-project, and every single one needs its own diff, against every other version of
-itself, forever.</p>
-
-<div class="punch">You are not writing poems any more. You are writing paperwork
-about poems.</div>
-
-<div class="beat">Try again?</div>
-<p>Okay, new idea. Forget the separate diff files. Just keep one file,
-<code>changelog.txt</code>, and every time you save, add a line about what you
-did.</p>
-<div class="out">Fixed the roses line.
-Added a new stanza.
-Changed the ending, felt too sad.</div>
-<p>One file. One place to check. Feels almost responsible.</p>
-
-<div class="beat">But</div>
-<p>Read that second line again. <em>"Fixed the roses line."</em></p>
-<p>Fixed it how? What did it say before you fixed it? You do not know. You did
-not write it down. You wrote that you changed something, not what it used to
-be.</p>
-<p>And be honest. The day you were tired, or in a hurry, or just forgot? You did
-not update the changelog that day either. You know you did not.</p>
-
-<div class="punch">It is not a record. It is a note you are hoping you can trust
-later.</div>
-
-<div class="beat">One more problem</div>
-<p>Your friend actually likes your poem. They want to add a line.</p>
-<p>You send them <code>poems.txt</code>. They add something beautiful, save it,
-and email it back as <code>poems_returned.txt</code>.</p>
-<p>Except, while you were waiting for them to reply, you kept writing too. You
-added your own line. You have your version. They have theirs.</p>
-<p>Both of you did something right. Neither of you did anything wrong.</p>
-
-<div class="punch">So which file is the poem now?</div>
-
-<div class="beat">A solution? Maybe?</div>
-<p>Fine. Open both files side by side. Read every single line of both. Find what
-is different. Carefully copy the good parts into a new file.</p>
-<p>Call it, of course, <code>poems_merged_v2_final.txt</code>.</p>
-<p>You did it. It is late, your eyes hurt from comparing two identical-looking
-paragraphs for the fifteenth time, but you did it.</p>
-
-<div class="beat">The truth</div>
-<p>You will miss a line eventually. Not because you are careless, but because
-comparing two versions of anything by eye, line by line, for long enough, is
-exactly the kind of task humans are bad at and do not notice they are bad at.</p>
-<p>Your friend's favourite line, the one they were proudest of, quietly does not
-make it into the merged file. Nobody meant for that to happen. It just did.</p>
-<p>And now think about doing this every time either of you saves. Now think about
-doing it with three friends. Five.</p>
-
-<div class="beat">Let us be honest with ourselves</div>
-<p>Look back at everything you just tried. Naming files "final". Numbering them.
-Writing diffs by hand. Keeping a changelog. Comparing two files line by line at
-midnight.</p>
-<p>Every single one of them needed you, a tired, distracted, forgetful human, to
-do the right thing, perfectly, every single time, forever.</p>
-
-<div class="punch">One tired night. One missed line. One overwritten file. That
-is all it takes to lose hours of work you cannot get back.</div>
-
-<div class="beat">What if</div>
-<p>What if you did not have to remember any of this?</p>
-<p>What if something kept every version, automatically, the moment you saved,
-with no renaming required?</p>
-<p>What if it could tell you exactly what changed, down to the line, without you
-writing a single diff by hand?</p>
-<p>What if two people could edit the same file, at the same time, and it figured
-out how to combine both of your work, without either of you losing a line?</p>
-
-<p><strong>Sit with that question for a second before you answer it.</strong></p>
-
-<p>Then open your terminal. That is the rest of today.</p>
-
-</div>
-</details>
-
-
-<div class="step">
-  <span class="lbl">Step 1</span>
-  <h3>Make a folder and claim it</h3>
-  <div class="cmd"><pre data-cmd="mkdir my-first-repo
+<div class="step"><span class="lbl">1</span>
+<h3>Make a folder, turn it into a repo</h3>
+<div class="cmd"><pre data-cmd="mkdir my-first-repo
 cd my-first-repo
 git init"></pre><button class="cp">copy</button></div>
-  <p><code>git init</code> made a hidden <code>.git</code> folder. Look at it:</p>
-  <div class="cmd"><pre data-cmd="ls -a"></pre><button class="cp">copy</button></div>
-  <p>That <code>.git</code> directory <em>is</em> the repository. Every version,
-  every message, every branch lives inside it. Delete it and you have an ordinary
-  folder with no history.</p>
-</div>
+<p class="tip"><code>ls -a</code> to see <code>.git</code>. That folder <em>is</em>
+the repo.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 2</span>
-  <h3>Write something, then look at it through git</h3>
-  <div class="cmd"><pre data-cmd="echo &quot;Shall I compare thee to a summer's day?&quot; > poem.txt
+<div class="step"><span class="lbl">2</span>
+<h3>Write something, look at it through git</h3>
+<div class="cmd"><pre data-cmd="echo &quot;Shall I compare thee to a summer's day?&quot; > poem.txt
 git status"></pre><button class="cp">copy</button></div>
-  <p>Git says <code>poem.txt</code> is <strong>untracked</strong>. It can see the
-  file but is not watching it yet. Git never assumes you want something recorded,
-  which is why passwords and build output do not end up in your history by
-  accident.</p>
-</div>
+<p class="tip">Says <strong>untracked</strong>. Git sees it but is not watching it
+yet.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 3</span>
-  <h3>Stage it, then commit it</h3>
-  <div class="cmd"><pre data-cmd="git add poem.txt
-git status"></pre><button class="cp">copy</button></div>
-  <p>Now it is <strong>staged</strong>. You have not saved anything yet. You have
-  put it on a shelf that holds what goes into the next commit.</p>
-  <div class="cmd"><pre data-cmd="git commit -m &quot;Add the first line&quot;
+<div class="step"><span class="lbl">3</span>
+<h3>Stage it, commit it</h3>
+<div class="cmd"><pre data-cmd="git add poem.txt
+git commit -m &quot;Add the first line&quot;
 git log --oneline"></pre><button class="cp">copy</button></div>
-  <div class="win">
-    <b>That is the loop</b>
-    Change something, stage it, describe it, record it. You will repeat this for
-    the rest of your life as a programmer. Do it twice more before moving on.
-  </div>
-</div>
+<p class="tip">Do this twice more with different edits before moving on.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 4</span>
-  <h3>Log in to GitHub from the terminal</h3>
-  <p>Sabse pehle we need to login. Everyone does this once:</p>
-  <div class="cmd"><pre data-cmd="gh auth login"></pre><button class="cp">copy</button></div>
-  <p>Answer: <strong>GitHub.com</strong> &rarr; <strong>HTTPS</strong> &rarr;
-  <strong>yes</strong> to authenticate git with your GitHub credentials &rarr;
-  <strong>login with a web browser</strong>. Copy the code, press Enter, paste it
-  in the browser.</p>
-  <div class="warn">
-    <b>Do not skip the third answer</b>
-    "Authenticate Git with your GitHub credentials?" &rarr; <strong>Yes</strong>.
-    That is what stops <code>git push</code> asking for a password every single
-    time.
-  </div>
-</div>
+<div class="step"><span class="lbl">4</span>
+<h3>Log in to GitHub</h3>
+<div class="cmd"><pre data-cmd="gh auth login"></pre><button class="cp">copy</button></div>
+<p class="tip">GitHub.com &rarr; HTTPS &rarr; <strong>Yes</strong> to authenticate
+git &rarr; browser. That "Yes" is what stops password prompts later.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 5</span>
-  <h3>Push it to GitHub</h3>
-  <p>The base command is <code>gh repo create</code>. Before you run it, answer
-  four questions. That is all the flags are.</p>
+<div class="step"><span class="lbl">5</span>
+<h3>Push it to GitHub</h3>
+<div class="cmd"><pre data-cmd="gh repo create my-first-repo --public --source=. --remote=origin --push --description &quot;My first CLI workshop repo&quot;"></pre><button class="cp">copy</button></div>
 
-  <table>
-    <tr><th>Question</th><th>Flag</th></tr>
-    <tr><td><strong>1.</strong> Same name as the folder, or different?</td>
-        <td>same: <code>--source=.</code><br>different: <code>gh repo create my-first-repo</code></td></tr>
-    <tr><td><strong>2.</strong> Who can see it?</td>
-        <td><code>--public</code> anyone on the internet<br>
-            <code>--private</code> only you and people you invite</td></tr>
-    <tr><td><strong>3.</strong> This folder, or a different one?</td>
-        <td>this one: <code>--source=.</code><br>
-            elsewhere: <code>--source=./projects/my-app</code><br>
-            neither: leave it out, you get an empty repo linked to nothing</td></tr>
-    <tr><td><strong>4.</strong> Push now, or later?</td>
-        <td><code>--push</code> now, omit it to push later</td></tr>
-  </table>
+<table class="flags">
+<tr><th>Flag</th><th>Answers</th></tr>
+<tr><td><code>--source=.</code></td><td>this folder (omit for an empty repo)</td></tr>
+<tr><td><code>--public</code></td><td>who sees it (<code>--private</code> otherwise)</td></tr>
+<tr><td><code>--push</code></td><td>upload now (omit to push later)</td></tr>
+<tr><td><code>--remote=origin</code></td><td>the short name you push to</td></tr>
+<tr><td><code>--description</code></td><td>what it is</td></tr>
+</table>
+<p class="tip">Flags go in any order. Only the repo name is positional.</p>
 
-  <p>Plus a description, so anyone who finds it knows what it is:</p>
-  <div class="cmd"><pre data-cmd="gh repo create my-first-repo --public --source=. --remote=origin --push --description &quot;My first CLI workshop repo&quot;"></pre><button class="cp">copy</button></div>
+<div class="cmd"><pre data-cmd="gh repo view --web"></pre><button class="cp">copy</button></div></div>
 
-  <div class="note">
-    <b>Do the flags have to be in that order?</b>
-    No. Flags can go in any order. Only the repo name is positional.
-  </div>
-
-  <p>Now look at it:</p>
-  <div class="cmd"><pre data-cmd="gh repo view --web"></pre><button class="cp">copy</button></div>
-</div>
-
-<details>
-<summary>What just got wired up: origin, upstream, and the three kinds of branch</summary>
-<div class="body">
-  <p><strong>An upstream</strong> is a tracked link between a local branch and a
-  remote branch. It tells git that when you run <code>git push</code> or
-  <code>git pull</code>, <em>this</em> is the remote branch you should talk
-  to.</p>
-
-  <p><strong>Three types of branch:</strong></p>
-  <table>
-    <tr><th>Kind</th><th>Where it lives</th></tr>
-    <tr><td>Local branch</td><td>On your machine. What you work on.</td></tr>
-    <tr><td>Remote-tracking branch</td>
-        <td>On your machine, read only. A snapshot of the server, updated when you
-            run <code>git fetch</code>. This is <code>origin/main</code>.</td></tr>
-    <tr><td>Remote branch</td><td>On the GitHub server. The real thing.</td></tr>
-  </table>
-
-  <p><code>origin</code> is just a nickname for a URL, and it is
-  <strong>per folder, not global</strong>. Every repo on your machine can have a
-  remote called <code>origin</code> pointing somewhere different. Git looks it up
-  in <code>.git/config</code>.</p>
-
-  <div class="cmd"><pre data-cmd="git remote -v
-cat .git/config"></pre><button class="cp">copy</button></div>
-
-  <p><strong>Why a short name matters.</strong> Without one you would push like
-  this, every time:</p>
-  <div class="out">git push https://github.com/{{user}}/my-first-repo.git main</div>
-  <p>With one, and after setting the upstream once, it is just:</p>
-  <div class="cmd"><pre data-cmd="git push"></pre><button class="cp">copy</button></div>
-  <p>The one-time setup is <code>git push -u origin main</code>. The
-  <code>-u</code> is what creates the tracked link. <code>--push</code> in step 5
-  did it for you.</p>
-</div>
-</details>
-
-<div class="check">
-  <div class="lbl">You should be able to answer</div>
-  <ol>
-    <li>What is inside <code>.git</code>, and what happens if you delete it?</li>
-    <li>What is the difference between <code>git add</code> and <code>git commit</code>?</li>
-    <li>Why does <code>git push</code> need no arguments after the first time?</li>
-    <li>Can two different repos on your laptop both have a remote called <code>origin</code>?</li>
-  </ol>
-</div>
+<div class="step"><span class="lbl">6</span>
+<h3>See what got wired up</h3>
+<div class="cmd"><pre data-cmd="git remote -v
+git push"></pre><button class="cp">copy</button></div>
+<p class="tip">Bare <code>git push</code> works because <code>--push</code> set the
+upstream. Without it: <code>git push -u origin main</code> once.</p></div>
 
 
 <!-- ===================== PHASE 2 ===================== -->
-<h2 id="phase2"><span class="n">2</span> &nbsp;Fork, branch, push, PR</h2>
+<h2 id="phase2"><span class="n">2</span> &nbsp;Fork, branch, PR</h2>
+<div class="aim">Contribute to a repo you do not own.
+<a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">accelerate-muj/git-started</a></div>
 
-<p>In Phase 1 you owned everything, so it was simple. Now you are contributing to
-a repo you <strong>do not own</strong>. You cannot push to it directly.</p>
-
-<p>So: fork it &rarr; clone your fork &rarr; branch &rarr; edit &rarr; push to your
-fork &rarr; open a pull request back to the original.</p>
-
-<div class="note">
-  <b>The repo</b>
-  <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">github.com/accelerate-muj/git-started</a>
-</div>
-
-<div class="step">
-  <span class="lbl">Step 1</span>
-  <h3>Fork it</h3>
-  <p>Open the repo in your browser and click <strong>Fork</strong> (top right).
-  Owner &rarr; your account. Keep the default name. <strong>Create fork</strong>.</p>
-  <p>GitHub copies the repo into your account. It is now at
-  <code>github.com/<span class="tok">{{user}}</span>/git-started</code>. You own
-  it. You can push to it. Nothing is on your laptop yet.</p>
-  <p>Or do the whole thing from the terminal, fork and clone in one:</p>
-  <div class="cmd"><pre data-cmd="gh repo fork accelerate-muj/git-started --clone"></pre><button class="cp">copy</button></div>
-  <p>That also sets up <code>upstream</code> for you. If you used the browser
-  button, do steps 2 and 3 by hand.</p>
-</div>
-
-<div class="step">
-  <span class="lbl">Step 2</span>
-  <h3>Clone YOUR fork</h3>
-  <div class="cmd"><pre data-cmd="gh repo clone {{user}}/git-started
+<div class="step"><span class="lbl">1</span>
+<h3>Fork and clone in one</h3>
+<div class="cmd"><pre data-cmd="gh repo fork accelerate-muj/git-started --clone
 cd git-started
 git remote -v"></pre><button class="cp">copy</button></div>
-  <p>You should see <strong>your</strong> username in the origin URL:</p>
-  <div class="out">origin  https://github.com/{{user}}/git-started.git (fetch)
-origin  https://github.com/{{user}}/git-started.git (push)</div>
-  <div class="warn">
-    <b>If you see accelerate-muj instead of your username</b>
-    You cloned the original by mistake, and your push will be rejected later.
-    Fix it now:
-  </div>
-  <div class="cmd"><pre data-cmd="git remote set-url origin https://github.com/{{user}}/git-started.git"></pre><button class="cp">copy</button></div>
-</div>
+<p class="tip">Must show <strong>your</strong> username on <code>origin</code>, and
+<code>accelerate-muj</code> on <code>upstream</code>.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 3</span>
-  <h3>Add the original as <code>upstream</code></h3>
-  <p>Your fork is a snapshot. If the original changes, your fork will not know.
-  Add it as a second remote:</p>
-  <div class="cmd"><pre data-cmd="git remote add upstream https://github.com/accelerate-muj/git-started.git
-git remote -v"></pre><button class="cp">copy</button></div>
-  <p>Now you have two: <code>origin</code> is <strong>your fork</strong>, which
-  you can push to. <code>upstream</code> is <strong>ours</strong>, which you can
-  only fetch from. That pair of names is a near universal convention.</p>
-  <div class="cmd"><pre data-cmd="git fetch upstream
-git merge upstream/main"></pre><button class="cp">copy</button></div>
-  <p>If nothing has changed since you forked, this prints
-  <code>Already up to date.</code></p>
-</div>
+<div class="step"><span class="lbl">2</span>
+<h3>If you forked with the web button instead</h3>
+<div class="cmd"><pre data-cmd="gh repo clone {{user}}/git-started
+cd git-started
+git remote add upstream https://github.com/accelerate-muj/git-started.git"></pre><button class="cp">copy</button></div>
+<p class="tip"><code>origin</code> = your fork, you can push. <code>upstream</code>
+= ours, fetch only.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 4</span>
-  <h3>Branch, never on main</h3>
-  <div class="cmd"><pre data-cmd="git switch -c add-{{name}}
-git branch"></pre><button class="cp">copy</button></div>
-  <p>The <code>*</code> marks where you are. Branching before you work keeps
-  <code>main</code> clean and means your pull request contains only the thing you
-  meant to propose.</p>
-  <div class="note">
-    <b>switch or checkout?</b>
-    <code>git switch -c</code> and <code>git checkout -b</code> do the same thing
-    here. <code>switch</code> was added in 2019 because <code>checkout</code> did
-    three unrelated jobs and confused everyone for a decade. Either works.
-  </div>
-</div>
+<div class="step"><span class="lbl">3</span>
+<h3>Sync, then branch</h3>
+<div class="cmd"><pre data-cmd="git fetch upstream
+git merge upstream/main
+git switch -c poem/{{user}}"></pre><button class="cp">copy</button></div></div>
 
-<div class="step">
-  <span class="lbl">Step 5</span>
-  <h3>Write your file</h3>
-  <p>Exactly one file, named after your GitHub username:</p>
-  <div class="cmd"><pre data-cmd="echo &quot;Hi, I am {{name}}. I am learning git at this workshop.&quot; > phase-2/poems/{{user}}.md"></pre><button class="cp">copy</button></div>
-  <p>Then open it and write something better. Sonnet 18 in modern English, in
-  Hindi, as a group chat, as a parody. Anything.</p>
-  <div class="win">
-    <b>Why the filename rule exists</b>
-    Your GitHub username is unique, so no two people can create the same file, so
-    no two pull requests can touch the same line. Thirty PRs will merge in a row
-    without a single conflict. That is deliberate. Phase 3 removes the safety net.
-  </div>
-</div>
+<div class="step"><span class="lbl">4</span>
+<h3>Make your file</h3>
+<div class="cmd"><pre data-cmd="echo &quot;# Sonnet 18, by {{name}}&quot; > phase-2/poems/{{user}}.md"></pre><button class="cp">copy</button></div>
+<p class="tip">Filename must be your GitHub username. Open it and write your version:
+modern English, Hindi, a parody, anything.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 6</span>
-  <h3>Stage, commit, push to your fork</h3>
-  <div class="cmd"><pre data-cmd="git add phase-2/poems/{{user}}.md
+<div class="step"><span class="lbl">5</span>
+<h3>Commit and push to your fork</h3>
+<div class="cmd"><pre data-cmd="git add phase-2/poems/{{user}}.md
 git commit -m &quot;Add {{name}}'s take on Sonnet 18&quot;
-git push -u origin add-{{name}}"></pre><button class="cp">copy</button></div>
-  <div class="warn">
-    <b>It is <code>git add .</code> with a space</b>
-    <code>git add.</code> fails with <em>'add.' is not a git command</em>. Naming
-    the file directly, as above, is a better habit anyway: <code>git add .</code>
-    stages everything, including files you forgot you touched.
-  </div>
-</div>
+git push -u origin poem/{{user}}"></pre><button class="cp">copy</button></div>
+<p class="tip"><code>git add .</code> needs the space. <code>git add.</code>
+fails.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 7</span>
-  <h3>Open the pull request</h3>
-  <div class="cmd"><pre data-cmd="gh pr create --repo accelerate-muj/git-started --title &quot;Add {{name}}&quot; --body &quot;Added my poem file.&quot;"></pre><button class="cp">copy</button></div>
-  <p>GitHub returns a URL. Open it and watch it get merged.</p>
-  <div class="warn">
-    <b>Do not forget <code>--repo</code></b>
-    Without it the PR opens against <em>your own fork</em>, which does nothing.
-    This is the single most common mistake in this phase.
-  </div>
-  <div class="cmd"><pre data-cmd="gh pr status
-gh pr list --repo accelerate-muj/git-started"></pre><button class="cp">copy</button></div>
-</div>
+<div class="step"><span class="lbl">6</span>
+<h3>Open the PR</h3>
+<div class="cmd"><pre data-cmd="gh pr create --repo accelerate-muj/git-started --title &quot;Add {{name}}&quot; --body &quot;Added my poem file.&quot;"></pre><button class="cp">copy</button></div>
+<div class="warn"><b>Do not drop <code>--repo</code></b>
+Without it the PR opens against your own fork and nothing reaches us.</div></div>
 
-<div class="step">
-  <span class="lbl">Step 8</span>
-  <h3>After it merges, catch your fork up</h3>
-  <div class="cmd"><pre data-cmd="git switch main
+<div class="step"><span class="lbl">7</span>
+<h3>After it merges</h3>
+<div class="cmd"><pre data-cmd="git switch main
 gh repo sync {{user}}/git-started
 git pull
-ls phase-2/poems/"></pre><button class="cp">copy</button></div>
-  <p>You now have everyone else's files too.</p>
-</div>
-
-<div class="check">
-  <div class="lbl">You should be able to answer</div>
-  <ol>
-    <li>What is the difference between <code>origin</code> and <code>upstream</code>?</li>
-    <li>Why did the filename rule guarantee nobody would conflict?</li>
-    <li>Is a pull request a git feature, or a GitHub feature?</li>
-  </ol>
-  <p style="margin-top:8px;font-size:14.5px;color:rgba(33,29,22,.7)">
-  The last one catches people. Git has no idea what a PR is. It is a GitHub
-  product built on top of branches, which is exactly why you need <code>gh</code>
-  and not <code>git</code> to make one.</p>
-</div>
+ls phase-2/poems/"></pre><button class="cp">copy</button></div></div>
 
 
 <!-- ===================== PHASE 3 ===================== -->
-<h2 id="phase3"><span class="n">3</span> &nbsp;Teams and merge conflicts</h2>
+<h2 id="phase3"><span class="n">3</span> &nbsp;Teams and conflicts</h2>
+<div class="aim">Same repo, same file, everyone at once. No fork this time.</div>
 
-<p>Phase 2 had no conflicts because everyone had their own file. Real projects do
-not have that luxury. Now you are on a team, everyone edits the
-<strong>same file</strong>, and pushes collide.</p>
+<div class="step host"><span class="lbl">Leader</span>
+<h3>Create the team repo</h3>
+<div class="cmd"><pre data-cmd="gh repo create team-{{team}} --template accelerate-muj/git-started-team --public --clone
+cd team-{{team}}"></pre><button class="cp">copy</button></div></div>
 
-<table>
-  <tr><th></th><th>Phase 2</th><th>Phase 3</th></tr>
-  <tr><td>Fork?</td><td>Yes</td><td>No, you are a collaborator</td></tr>
-  <tr><td>Push to</td><td>Your fork</td><td>The team repo directly</td></tr>
-  <tr><td>PR goes</td><td>Fork &rarr; original</td><td>Branch &rarr; main, same repo</td></tr>
-  <tr><td>Who merges</td><td>The repo owner</td><td>Everyone. You are all maintainers.</td></tr>
-  <tr><td>Conflicts</td><td>No</td><td><strong>Yes</strong></td></tr>
-</table>
+<div class="step host"><span class="lbl">Leader</span>
+<h3>Add each teammate</h3>
+<div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/collaborators/TEAMMATE-USERNAME"></pre><button class="cp">copy</button></div>
+<p class="tip">Start early, invites take time. Or Settings &rarr; Collaborators &rarr;
+Add people.</p></div>
 
-<div class="step">
-  <span class="lbl">Leader only &middot; Step 1</span>
-  <h3>Create the team repo</h3>
-  <p>Fastest way, from our template, which comes with the shared file already in
-  it:</p>
-  <div class="cmd"><pre data-cmd="gh repo create team-{{team}} --template accelerate-muj/git-started-team --public --clone
-cd team-{{team}}"></pre><button class="cp">copy</button></div>
-  <details>
-    <summary>Or build it from scratch, if you would rather see every step</summary>
-    <div class="body">
-      <div class="cmd"><pre data-cmd="gh repo create team-{{team}} --public
-mkdir team-{{team}} && cd team-{{team}}
-git init"></pre><button class="cp">copy</button></div>
-      <p>Create <code>team.txt</code> with a slot per person, then:</p>
-      <div class="cmd"><pre data-cmd="git add .
-git commit -m &quot;Initial team file&quot;
-git branch -M main
-git remote add origin https://github.com/{{leader}}/team-{{team}}.git
-git push -u origin main"></pre><button class="cp">copy</button></div>
-    </div>
-  </details>
-</div>
+<div class="step"><span class="lbl">1</span>
+<h3>Accept the invite</h3>
+<div class="cmd"><pre data-cmd="gh api user/repository_invitations"></pre><button class="cp">copy</button></div>
+<p class="tip">Note the <code>id</code>, then:</p>
+<div class="cmd"><pre data-cmd="gh api -X PATCH user/repository_invitations/INVITATION-ID"></pre><button class="cp">copy</button></div>
+<div class="warn"><b><code>gh repo accept</code> is not a command</b>
+It does not exist. Use the two above, or click the link on
+<a href="https://github.com/notifications" target="_blank" rel="noopener">github.com/notifications</a>.</div></div>
 
-<div class="step">
-  <span class="lbl">Leader only &middot; Step 2</span>
-  <h3>Add your teammates</h3>
-  <p>One line per teammate. Start this early, it is the step that eats time.</p>
-  <div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/collaborators/TEAMMATE-USERNAME"></pre><button class="cp">copy</button></div>
-  <p>Or use the web UI, which is often faster in a room:
-  repo &rarr; <strong>Settings</strong> &rarr; <strong>Collaborators</strong> &rarr;
-  <strong>Add people</strong>.</p>
-</div>
-
-<div class="step">
-  <span class="lbl">Everyone else &middot; Step 3</span>
-  <h3>Accept the invitation</h3>
-  <div class="warn">
-    <b>There is no <code>gh repo accept</code></b>
-    That command does not exist. It fails with
-    <em>unknown command "accept" for "gh repo"</em>. Use this instead, or just
-    click the link in your email or at
-    <a href="https://github.com/notifications" target="_blank" rel="noopener">github.com/notifications</a>.
-  </div>
-  <p>List your pending invitations and note the <code>id</code>:</p>
-  <div class="cmd"><pre data-cmd="gh api user/repository_invitations"></pre><button class="cp">copy</button></div>
-  <p>Then accept it:</p>
-  <div class="cmd"><pre data-cmd="gh api -X PATCH user/repository_invitations/INVITATION-ID"></pre><button class="cp">copy</button></div>
-  <p>Until you accept, your push is rejected with a confusing permission error.</p>
-</div>
-
-<div class="step">
-  <span class="lbl">Everyone &middot; Step 4</span>
-  <h3>Clone, branch, edit the shared file</h3>
-  <div class="cmd"><pre data-cmd="git clone https://github.com/{{leader}}/team-{{team}}.git
+<div class="step"><span class="lbl">2</span>
+<h3>Clone, branch, edit the shared file</h3>
+<div class="cmd"><pre data-cmd="git clone https://github.com/{{leader}}/team-{{team}}.git
 cd team-{{team}}
 git switch -c add-{{name}}"></pre><button class="cp">copy</button></div>
-  <p>No fork and no <code>upstream</code> this time. You have push access to
-  <code>origin</code> directly, because you are on the inside of this project.
-  This is how a team of colleagues works, as opposed to how a stranger
-  contributes.</p>
-  <p>Open the shared file and fill in <strong>your</strong> slot. Then:</p>
-  <div class="cmd"><pre data-cmd="git add .
-git commit -m &quot;Add {{name}} to the team file&quot;
+<p class="tip">Fill in <strong>your</strong> slot in the shared file, then:</p>
+<div class="cmd"><pre data-cmd="git add .
+git commit -m &quot;Add {{name}}&quot;
 git push -u origin add-{{name}}
 gh pr create --title &quot;Add {{name}}&quot; --body &quot;Added my info.&quot;"></pre><button class="cp">copy</button></div>
-  <p>No <code>--repo</code> needed now. The PR goes from your branch to
-  <code>main</code> inside the same repo.</p>
-</div>
+<p class="tip">No <code>--repo</code> now. Same repo, branch &rarr; main.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 5</span>
-  <h3>The conflict moment</h3>
-  <p>The first PR merges cleanly. Everything is fine. It will not be fine for
-  anybody else. GitHub will say:</p>
-  <div class="out">This branch has conflicts that must be resolved</div>
-  <div class="win">
-    <b>Nothing has gone wrong</b>
-    Your branch was built on a version of <code>main</code> that no longer exists.
-    Somebody else's line is now where yours was, and git will not guess which of
-    you should win. This is git asking you a question, not reporting an error.
-  </div>
-  <p>Fix it on your machine:</p>
-  <div class="cmd"><pre data-cmd="git switch main
+<div class="step"><span class="lbl">3</span>
+<h3>When GitHub says your branch has conflicts</h3>
+<div class="cmd"><pre data-cmd="git switch main
 git pull origin main
 git switch add-{{name}}
 git merge main"></pre><button class="cp">copy</button></div>
-</div>
+<p class="tip">Nothing has broken. Your branch was built on an older
+<code>main</code>.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 6</span>
-  <h3>Read the markers</h3>
-  <div class="out">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
-1. Name: Ananya   Language: JavaScript
+<div class="step"><span class="lbl">4</span>
+<h3>Resolve it</h3>
+<div class="out">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+your version
 =======
-1. Name: Rahul    Language: Python
+what is already on main
 &gt;&gt;&gt;&gt;&gt;&gt;&gt; main</div>
-  <table>
-    <tr><th>Marker</th><th>Means</th></tr>
-    <tr><td><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code></td><td>Your version, on your branch</td></tr>
-    <tr><td><code>=======</code></td><td>The dividing line</td></tr>
-    <tr><td><code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; main</code></td><td>The version already on main</td></tr>
-  </table>
-  <div class="warn">
-    <b>The bit everyone gets wrong</b>
-    A conflict feels like a question of who wins. Almost always the right answer
-    is <strong>both</strong>. You want Rahul's line <em>and</em> yours. Delete the
-    three marker lines and keep both entries.
-  </div>
-  <p>The markers are just text git inserted. Nothing is watching them. Edit the
-  file until it reads the way it should, then:</p>
-  <div class="cmd"><pre data-cmd="git add .
-git commit -m &quot;Resolve conflict, keep both entries&quot;
+<p class="tip"><strong>Usually you keep both.</strong> Edit the file, delete the
+three marker lines, then:</p>
+<div class="cmd"><pre data-cmd="git add .
+git commit -m &quot;Resolve conflict, keep both&quot;
 git push origin add-{{name}}"></pre><button class="cp">copy</button></div>
-  <div class="note">
-    <b><code>git add</code> is how you say "resolved"</b>
-    There is no separate resolve command, which surprises people. Staging the
-    file <em>is</em> the resolution.
-  </div>
-  <p>Stuck or panicking? You can always back out and start again. Nothing is
-  lost:</p>
-  <div class="cmd"><pre data-cmd="git merge --abort"></pre><button class="cp">copy</button></div>
-</div>
+<p class="tip"><code>git add</code> <em>is</em> how you say resolved. Panicking?
+<code>git merge --abort</code> puts everything back.</p></div>
 
-<div class="step">
-  <span class="lbl">Step 7</span>
-  <h3>Review and merge each other's work</h3>
-  <div class="cmd"><pre data-cmd="gh pr list
+<div class="step"><span class="lbl">5</span>
+<h3>Review and merge each other</h3>
+<div class="cmd"><pre data-cmd="gh pr list
 gh pr diff PR-NUMBER
 gh pr merge PR-NUMBER --merge"></pre><button class="cp">copy</button></div>
-  <div class="warn">
-    <b>The golden rule: one PR at a time</b>
-    After a merge, the next person pulls <code>main</code>, resolves their
-    conflict, and only then merges. If five people merge at once,
-    <code>main</code> becomes a mess and the last person faces a five-way conflict
-    nobody can untangle. Go around the table one by one.
-  </div>
-  <p>When everything is in:</p>
-  <div class="cmd"><pre data-cmd="git switch main
+<div class="warn"><b>One PR at a time</b>
+After each merge the next person pulls <code>main</code> and fixes their conflict.
+Five at once and nobody can untangle it.</div>
+<div class="cmd"><pre data-cmd="git switch main
 git pull origin main
-git log --oneline --graph --all"></pre><button class="cp">copy</button></div>
-</div>
-
-<div class="check">
-  <div class="lbl">You should be able to answer</div>
-  <ol>
-    <li>What do <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> separate?</li>
-    <li>Which command marks a conflict resolved?</li>
-    <li>Your teammate merged first and your branch is stale. What now?</li>
-    <li>Why does merging one at a time make this easier?</li>
-  </ol>
-</div>
+git log --oneline --graph --all"></pre><button class="cp">copy</button></div></div>
 
 
 <!-- ===================== TROUBLE ===================== -->
 <h2 id="trouble">Help</h2>
-<p>Type the error you are seeing.</p>
 <input id="tsearch" placeholder="paste your error, or a word from it…" autocomplete="off">
 
 <table id="ttable">
-  <tr><th>What you see</th><th>Why</th><th>Fix</th></tr>
+<tr><th>What you see</th><th>Fix</th></tr>
 
-  <tr><td><code>Permission denied</code> on push</td>
-      <td>You cloned the original repo, not your fork</td>
-      <td><code>git remote set-url origin https://github.com/{{user}}/git-started.git</code></td></tr>
+<tr><td><code>Permission denied</code> on push, Phase 2</td>
+    <td>You cloned ours, not your fork:<br>
+    <code>git remote set-url origin https://github.com/{{user}}/git-started.git</code></td></tr>
 
-  <tr><td><code>Permission denied</code> in Phase 3</td>
-      <td>You have not accepted the collaborator invitation</td>
-      <td><code>gh api user/repository_invitations</code> then
-          <code>gh api -X PATCH user/repository_invitations/ID</code></td></tr>
+<tr><td><code>Permission denied</code> on push, Phase 3</td>
+    <td>Invite not accepted:<br><code>gh api user/repository_invitations</code>
+    then <code>gh api -X PATCH user/repository_invitations/ID</code></td></tr>
 
-  <tr><td><code>'add.' is not a git command</code></td>
-      <td>Missing space</td>
-      <td><code>git add .</code> with a space, or name the file directly</td></tr>
+<tr><td><code>'add.' is not a git command</code></td>
+    <td><code>git add .</code> with a space</td></tr>
 
-  <tr><td><code>unknown command "accept" for "gh repo"</code></td>
-      <td><code>gh repo accept</code> does not exist</td>
-      <td>Use <code>gh api user/repository_invitations</code>, or accept in the browser</td></tr>
+<tr><td><code>unknown command "accept" for "gh repo"</code></td>
+    <td>It does not exist. Use the invitations API, or accept in the browser.</td></tr>
 
-  <tr><td><code>fatal: not a git repository</code></td>
-      <td>You are not inside the project folder</td>
-      <td><code>cd</code> into it. <code>pwd</code> shows where you are.</td></tr>
+<tr><td><code>fatal: not a git repository</code></td>
+    <td><code>cd</code> into the project folder. <code>pwd</code> shows where you are.</td></tr>
 
-  <tr><td><code>error: pathspec did not match</code></td>
-      <td>Forgot <code>-c</code> or <code>-b</code>, so git looked for an existing branch</td>
-      <td><code>git switch -c add-{{name}}</code></td></tr>
+<tr><td><code>error: pathspec did not match</code></td>
+    <td>Missing <code>-c</code>: <code>git switch -c add-{{name}}</code></td></tr>
 
-  <tr><td>PR opened against your own fork</td>
-      <td>Forgot <code>--repo</code> in Phase 2</td>
-      <td><code>gh pr create --repo accelerate-muj/git-started</code></td></tr>
+<tr><td>PR opened against your own fork</td>
+    <td>Add <code>--repo accelerate-muj/git-started</code></td></tr>
 
-  <tr><td><code>remote upstream already exists</code></td>
-      <td>You added it twice</td>
-      <td>Harmless. Ignore it, or <code>git remote remove upstream</code> and re-add.</td></tr>
+<tr><td><code>remote upstream already exists</code></td>
+    <td>Harmless. Ignore it.</td></tr>
 
-  <tr><td><code>! [rejected] main -> main</code></td>
-      <td>Somebody pushed before you</td>
-      <td><code>git pull origin main</code> then push again</td></tr>
+<tr><td><code>! [rejected] main -&gt; main</code></td>
+    <td><code>git pull origin main</code> then push again</td></tr>
 
-  <tr><td><code>CONFLICT (content): Merge conflict in ...</code></td>
-      <td>Two people changed the same lines. Expected in Phase 3.</td>
-      <td>Edit the file, keep both, delete the marker lines, <code>git add .</code>, commit</td></tr>
+<tr><td><code>CONFLICT (content): Merge conflict in ...</code></td>
+    <td>Expected in Phase 3. Keep both, delete markers, <code>git add .</code>, commit.</td></tr>
 
-  <tr><td>Leftover <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> in the file</td>
-      <td>You missed a marker when resolving</td>
-      <td>Search the file for <code>&lt;&lt;&lt;</code> and delete every marker line</td></tr>
+<tr><td>Leftover <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> in the file</td>
+    <td>Search for <code>&lt;&lt;&lt;</code> and delete every marker line</td></tr>
 
-  <tr><td><code>refusing to merge unrelated histories</code></td>
-      <td>The two histories share no common commit</td>
-      <td><code>git pull origin main --allow-unrelated-histories</code></td></tr>
+<tr><td><code>refusing to merge unrelated histories</code></td>
+    <td><code>git pull origin main --allow-unrelated-histories</code></td></tr>
 
-  <tr><td>"There isn't anything to compare"</td>
-      <td>You committed to <code>main</code> instead of your branch</td>
-      <td><code>git switch -c add-{{name}}</code> then push that</td></tr>
+<tr><td>"There isn't anything to compare"</td>
+    <td>You committed to <code>main</code>. Branch and push that instead.</td></tr>
 
-  <tr><td><code>gh pr merge</code> fails</td>
-      <td>The PR still has conflicts</td>
-      <td>The author resolves them first, then merge</td></tr>
+<tr><td><code>gh pr merge</code> fails</td>
+    <td>PR still has conflicts. Author fixes first.</td></tr>
 
-  <tr><td>Git asks for a password and rejects it</td>
-      <td>GitHub removed password auth for git in 2021</td>
-      <td><code>gh auth login</code> again, say <strong>yes</strong> to the git credentials question</td></tr>
+<tr><td>Password asked for and rejected</td>
+    <td><code>gh auth login</code>, say <strong>yes</strong> to the git credentials question</td></tr>
 
-  <tr><td><code>gh: command not found</code></td>
-      <td>Your terminal cached the old PATH</td>
-      <td>Close the terminal and open a new one</td></tr>
+<tr><td><code>gh: command not found</code></td>
+    <td>Close the terminal, open a new one</td></tr>
 
-  <tr><td>Stuck in a text editor you cannot exit</td>
-      <td>It is vim</td>
-      <td>Press <code>Esc</code>, then type <code>:wq</code> and Enter</td></tr>
+<tr><td>Stuck in an editor you cannot exit</td>
+    <td>It is vim. <code>Esc</code> then <code>:wq</code> then Enter.</td></tr>
 
-  <tr><td>You want to undo the merge and start over</td>
-      <td>Nothing is lost. Ever.</td>
-      <td><code>git merge --abort</code></td></tr>
+<tr><td>Want to undo and start again</td>
+    <td><code>git merge --abort</code>. Nothing is lost.</td></tr>
 </table>
 
-<div class="note" style="margin-top:20px">
-  <b>Nothing here matches?</b>
-  Run <code>git status</code>. It tells you where you are and what git thinks is
-  going on, and it is impossible to break anything with it. Then put your hand up.
-</div>
+<p class="tip" style="margin-top:14px">Nothing matches? Run <code>git status</code>.
+It cannot break anything and it tells you where you are. Then put your hand up.</p>
+
 
 <!-- ===================== NEXT ===================== -->
 <h2 id="next">Phase 4 and onwards</h2>
-
-<p>Today stops here. The handbook does not.</p>
-
-<p><strong>Rabbit Holes</strong> picks up at Phase 4 and runs to Phase 16. About
-120 pages, one PDF per phase, so you can take one and ignore the rest.</p>
+<div class="aim">Today stops here. The handbook does not.</div>
 
 <div class="next-hero">
   <div class="nh-num">4</div>
   <div class="nh-body">
     <a class="nh-title" href="handbook/phase-04-undo.pdf">Undo &rarr;</a>
-    <p class="nh-sub">Every way to take something back. <code>restore</code>, the
-    three modes of <code>reset</code>, <code>revert</code>, <code>reflog</code>,
-    <code>stash</code>, and the only two commands that genuinely destroy work.</p>
+    <p class="nh-sub">Every way to take something back, and the only two commands
+    that genuinely destroy work.</p>
     <p class="nh-why">Start here. Most people are scared of git because they think
-    a wrong command loses work. It almost never does, and this is the phase that
-    proves it. Read it and you will stop being careful in the way that slows you
-    down.</p>
+    a wrong command loses work. It almost never does.</p>
   </div>
 </div>
 
@@ -902,45 +526,27 @@ git log --oneline --graph --all"></pre><button class="cp">copy</button></div>
 <summary>The other twelve</summary>
 <div class="body">
 <table>
-  <tr><th></th><th>Phase</th><th>About</th></tr>
-  <tr><td><strong>5</strong></td><td><a href="handbook/phase-05-rewriting.pdf">Rewriting history</a></td>
-      <td>Interactive rebase, squashing, splitting one commit into two, cherry-pick, and removing a file from every commit that ever held it.</td></tr>
-  <tr><td><strong>6</strong></td><td><a href="handbook/phase-06-forensics.pdf">Forensics</a></td>
-      <td>Reading history instead of writing it. <code>blame</code> without the noise, and <code>bisect run</code> finding the commit that broke the build while you make tea.</td></tr>
-  <tr><td><strong>7</strong></td><td><a href="handbook/phase-07-merging.pdf">Merging deeply</a></td>
-      <td>What today's conflict actually was. Three-way merges, merge strategies, better conflict markers, and teaching git to resolve the same conflict once.</td></tr>
-  <tr><td><strong>8</strong></td><td><a href="handbook/phase-08-remotes.pdf">Remotes and big repos</a></td>
-      <td>Refspecs read aloud, worktrees, shallow and partial clones, submodules, LFS.</td></tr>
-  <tr><td><strong>9</strong></td><td><a href="handbook/phase-09-plumbing.pdf">Plumbing</a></td>
-      <td>What is actually inside <code>.git</code>. Why a commit is not a diff, and why a branch is 41 bytes. The one where it clicks.</td></tr>
-  <tr><td><strong>10</strong></td><td><a href="handbook/phase-10-trust.pdf">Trust</a></td>
-      <td>Anyone can commit under your name. Signing, what Verified really proves, releases, and the day somebody commits a password.</td></tr>
-  <tr><td><strong>11</strong></td><td><a href="handbook/phase-11-config.pdf">Config and automation</a></td>
-      <td>Aliases worth having, <code>.gitignore</code> versus <code>.gitattributes</code>, and hooks that stop a bad commit existing.</td></tr>
-  <tr><td><strong>12</strong></td><td><a href="handbook/phase-12-github.pdf">GitHub as a platform</a></td>
-      <td>Everything that is not git. Issues, templates, projects, pages, and a search syntax worth learning properly.</td></tr>
-  <tr><td><strong>13</strong></td><td><a href="handbook/phase-13-gh.pdf">The gh CLI in full</a></td>
-      <td>The whole command surface, and <code>gh api</code> for everything that has no command.</td></tr>
-  <tr><td><strong>14</strong></td><td><a href="handbook/phase-14-actions.pdf">Actions and CI/CD</a></td>
-      <td>Making the repo do the work. Also the two triggers that can hand your repository to a stranger.</td></tr>
-  <tr><td><strong>15</strong></td><td><a href="handbook/phase-15-maintainer.pdf">Being a maintainer</a></td>
-      <td>The longest, and the least about commands. Licensing, reviewing well, triage, saying no, burnout, succession.</td></tr>
-  <tr><td><strong>16</strong></td><td><a href="handbook/phase-16-scale.pdf">Scale and origins</a></td>
-      <td>Where git came from in ten days of 2005, and why that explains every strange part of it.</td></tr>
+<tr><td><strong>5</strong></td><td><a href="handbook/phase-05-rewriting.pdf">Rewriting history</a></td><td>Interactive rebase, squashing, splitting a commit.</td></tr>
+<tr><td><strong>6</strong></td><td><a href="handbook/phase-06-forensics.pdf">Forensics</a></td><td><code>bisect</code> finding what broke the build while you make tea.</td></tr>
+<tr><td><strong>7</strong></td><td><a href="handbook/phase-07-merging.pdf">Merging deeply</a></td><td>What today's conflict actually was.</td></tr>
+<tr><td><strong>8</strong></td><td><a href="handbook/phase-08-remotes.pdf">Remotes, big repos</a></td><td>Refspecs, worktrees, submodules, LFS.</td></tr>
+<tr><td><strong>9</strong></td><td><a href="handbook/phase-09-plumbing.pdf">Plumbing</a></td><td>Inside <code>.git</code>. The one where it clicks.</td></tr>
+<tr><td><strong>10</strong></td><td><a href="handbook/phase-10-trust.pdf">Trust</a></td><td>Anyone can commit under your name. Signing.</td></tr>
+<tr><td><strong>11</strong></td><td><a href="handbook/phase-11-config.pdf">Config, automation</a></td><td>Aliases, attributes, hooks.</td></tr>
+<tr><td><strong>12</strong></td><td><a href="handbook/phase-12-github.pdf">GitHub as a platform</a></td><td>Everything that is not git.</td></tr>
+<tr><td><strong>13</strong></td><td><a href="handbook/phase-13-gh.pdf">gh CLI in full</a></td><td>The whole surface, plus <code>gh api</code>.</td></tr>
+<tr><td><strong>14</strong></td><td><a href="handbook/phase-14-actions.pdf">Actions and CI/CD</a></td><td>Making the repo do the work.</td></tr>
+<tr><td><strong>15</strong></td><td><a href="handbook/phase-15-maintainer.pdf">Being a maintainer</a></td><td>Reviewing, triage, saying no, burnout.</td></tr>
+<tr><td><strong>16</strong></td><td><a href="handbook/phase-16-scale.pdf">Scale and origins</a></td><td>Ten days in 2005, and why git is shaped like this.</td></tr>
 </table>
-
-<p style="font-size:14.5px;color:rgba(33,29,22,.7)">If you are picking rather than
-reading in order: <strong>4</strong> if git frightens you, <strong>6</strong> when
-something broke and nobody knows when, <strong>9</strong> for the moment it all
-clicks, <strong>15</strong> if you have just inherited a repo.</p>
 </div>
 </details>
 
 <footer>
   Accelerate &middot; Manipal University Jaipur &middot;
   <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">github.com/accelerate-muj/git-started</a><br>
-  Corrections are the most useful thing this page can get. A command that does not
-  work on your machine wastes thirty people's time at once, so please open an issue.
+  A command here that does not work wastes thirty people's time at once. Please
+  open an issue.
 </footer>
 
 </main>
