@@ -40,13 +40,14 @@ import argparse
 import asyncio
 import io
 import json
+import os
 import re
 import secrets
 import socket
 from contextlib import suppress
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from filter import Dictionary
@@ -249,16 +250,31 @@ def make_app(room: Room, host_key: str, port: int,
              fixed_ip: str | None = None) -> FastAPI:
     app = FastAPI(title="Chaos Draft")
 
-    def current_join_url() -> str:
+    def current_join_url(request: Request | None = None) -> str:
         """
-        Worked out fresh on every request, never cached.
+        The URL to put on the QR, worked out fresh on every request.
 
-        Moving between wifi and a phone hotspot changes this machine's address.
-        If the QR were built once at startup it would keep pointing at the old
-        one, and the failure is silent: firewall fine, server fine, nothing
-        connects. Recomputing means refreshing the QR is always enough.
+        Taken from the Host header of the request that asked for it, which means
+        the QR is correct wherever this happens to be running: on a laptop over
+        wifi, behind a tunnel, or on a hosting provider. No configuration and
+        nothing to keep in sync.
+
+        Falls back to this machine's LAN address when there is no request to read,
+        which is the case for the QR printed in the terminal at startup.
+
+        An earlier version built the URL once at startup from the LAN address. It
+        kept pointing at the old network after switching to a hotspot, and the
+        failure was silent: firewall fine, server fine, nothing connects.
         """
-        return f"http://{fixed_ip or lan_ip()}:{port}"
+        if fixed_ip:
+            return f"http://{fixed_ip}:{port}"
+        if request is not None:
+            host = request.headers.get("host")
+            if host and not host.startswith(("localhost", "127.")):
+                # A proxy in front of us knows whether the client used HTTPS.
+                proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+                return f"{proto}://{host}"
+        return f"http://{lan_ip()}:{port}"
 
     @app.get("/")
     async def index():
@@ -269,13 +285,13 @@ def make_app(room: Room, host_key: str, port: int,
         return room.doc
 
     @app.get("/join-url", response_class=PlainTextResponse)
-    async def join():
-        return current_join_url()
+    async def join(request: Request):
+        return current_join_url(request)
 
     @app.get("/qr.svg")
-    async def qr():
+    async def qr(request: Request):
         try:
-            return Response(qr_svg(current_join_url()),
+            return Response(qr_svg(current_join_url(request)),
                             media_type="image/svg+xml",
                             headers={"Cache-Control": "no-store"})
         except Exception:
@@ -406,7 +422,9 @@ def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Chaos Draft server")
-    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--port", type=int,
+                   default=int(os.environ.get("PORT", 8000)),
+                   help="Defaults to $PORT when hosted, else 8000.")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--host-key",
                    help="Pin the host key yourself. Otherwise one is generated and "
