@@ -310,7 +310,9 @@ class Dictionary:
             return True
         return False
 
-    def scan(self, text: str, typing_at: int | None = None) -> list[tuple[int, int, str]]:
+    def scan(self, text: str,
+             typing_at: "int | list[int] | None" = None,
+             completed_only: bool = False) -> list[tuple[int, int, str]]:
         """
         Find every span of `text` that has to be removed, as (start, end, why).
 
@@ -327,19 +329,35 @@ class Dictionary:
            blockable. Removing just that word leaves "behen ke" sitting in the
            document reading exactly like what it is.
 
-        `typing_at` is a cursor position whose word is left alone, because it is
-        half-written rather than finished. Without it the filter judges every
-        prefix as you type and eats perfectly ordinary words partway through:
+        `typing_at` is a cursor position, or a list of them, whose words are left
+        alone because they are half-written rather than finished. Pass EVERY
+        connected person's cursor, not just the one who typed: any edit rescans
+        the whole document, so with one cursor protected everybody else's
+        half-typed word is still destroyed, which in a room is constant.
+
+        `completed_only` goes further and checks a word only once something
+        follows it: a space, a newline, or punctuation. That matches what a
+        person expects, which is that the filter reacts when they finish a word
+        rather than while they are in the middle of it.
+
+        Without either guard the filter judges every prefix as it arrives and
+        eats ordinary words partway through:
 
             assignment   ..X.......   deleted at "ass"
             analysis     ...X....     deleted at "anal"
             titanic      ..X....      deleted at "tit"
             cocktail     ...X....     deleted at "cock"
 
-        The word is checked the moment the cursor leaves it, so nothing is
-        skipped, it is only deferred until you have finished typing it.
+        Nothing is skipped permanently. It is deferred until the word is
+        finished, and a settle pass with no guards runs when typing stops.
         """
         spans: list[tuple[int, int, str]] = []
+        if typing_at is None:
+            carets: list[int] = []
+        elif isinstance(typing_at, int):
+            carets = [typing_at]
+        else:
+            carets = [c for c in typing_at if c is not None]
 
         # Token positions in the original string.
         tokens = [(m.start(), m.end(), m.group()) for m in re.finditer(r"\S+", text)]
@@ -347,8 +365,13 @@ class Dictionary:
             return spans
 
         def being_typed(start: int, end: int) -> bool:
-            """Is the cursor inside this span, making it half-written?"""
-            return typing_at is not None and start <= typing_at <= end
+            """Is anybody's cursor inside this span, making it half-written?"""
+            if any(start <= c <= end for c in carets):
+                return True
+            if completed_only:
+                # Nothing after it yet, so the writer has not finished the word.
+                return end >= len(text) or not text[end].isspace() and                        text[end].isalnum()
+            return False
 
         for start, end, tok in tokens:
             if being_typed(start, end):

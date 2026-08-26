@@ -127,7 +127,23 @@ class Room:
                                   "version": self.version, "by": name,
                                   "len": len(self.doc)})
 
-            removals, removed_words, micros = self._scrub(cursor)
+            # Only look at the document when a word has actually been FINISHED,
+            # meaning this edit added a space, a newline or punctuation. Or when
+            # something was deleted, which can join two words together.
+            #
+            # Scanning on every keystroke was the cause of the whole mess. It
+            # judged half-typed words, so ordinary ones were destroyed partway
+            # through ("assignment" at "ass"), and because any edit rescans the
+            # entire document, one person typing could eat somebody else's
+            # half-written word on the other side of the page. Cursor guards
+            # patched over that and it still felt erratic, because the real
+            # problem was rewriting a document that people are typing into.
+            finished_a_word = op.d > 0 or any(
+                (not ch.isalnum()) and ch not in "'-" for ch in op.i)
+            if finished_a_word:
+                removals, removed_words, micros = self._scrub(cursor)
+            else:
+                removals, removed_words, micros = [], [], 0
 
         for op in removals:
             await self.broadcast({"type": "op", "op": op.to_json(),

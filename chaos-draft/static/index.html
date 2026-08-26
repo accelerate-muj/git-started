@@ -200,8 +200,7 @@ const key = new URLSearchParams(location.search).get("key") || "";
 
 let ws, me = "", isHost = false, noticeTimer;
 let version = 0;        // last server version we have applied
-let shadow = "";        // what we believe the server holds
-let pending = [];       // ops sent but not yet seen coming back
+let shadow = "";        // what the server has confirmed
 
 const paper = $("paper");
 
@@ -286,35 +285,54 @@ function setDoc(text, v){
   paper.value = text;
   shadow = text;
   version = v;
-  pending = [];
   paper.setSelectionRange(Math.min(caret, text.length), Math.min(caret, text.length));
+  outstanding = null;
   grow();
   countWords();
 }
 
 /* ---------- sending local edits ---------- */
 
-let sendTimer = null, settleTimer = null;
+let settleTimer = null;
+
+/*
+  Sync, using the standard one-outstanding-operation model.
+
+  At most ONE edit is in flight at a time. Anything typed while waiting for the
+  server to acknowledge it stays local until the acknowledgement arrives, then
+  goes as a single new edit.
+
+  The previous version fired an edit every 90ms regardless. If you typed faster
+  than the round trip, the second edit was written against a document that
+  already included the first locally, but the server transformed it against the
+  first anyway. Every character got shifted twice, and two people typing near
+  each other shredded into each other:
+
+      "assignment" + "analysis"  ->  "aasnsailgynsmiesnt"
+
+  That, not the filter, was what felt broken.
+
+  shadow      what the server has confirmed
+  outstanding the one edit sent and not yet acknowledged
+*/
+let outstanding = null;
+
+function sendIfIdle(){
+  if (outstanding || !ws || ws.readyState !== WebSocket.OPEN) return;
+  const op = diff(shadow, paper.value);
+  if (!op) return;
+  outstanding = op;
+  ws.send(JSON.stringify({type:"op", op, base: version,
+                          cursor: paper.selectionStart}));
+}
 
 function localChanged(){
   grow();
   countWords();
+  sendIfIdle();
 
-  clearTimeout(sendTimer);
-  sendTimer = setTimeout(() => {
-    const op = diff(shadow, paper.value);
-    if (!op || !ws || ws.readyState !== WebSocket.OPEN) return;
-    shadow = paper.value;
-    pending.push(op);
-    // The caret goes with the edit so the server can leave the word being typed
-    // alone. Without it the filter judges half-typed words and eats ordinary
-    // ones partway through: "assignment" vanishes at "ass".
-    ws.send(JSON.stringify({type:"op", op, base: version,
-                            cursor: paper.selectionStart}));
-  }, 90);
-
-  // Typing stopped. Ask for one more pass with nothing protected, so a word left
-  // half-written and then abandoned is still checked.
+  // Typing stopped. One more pass with nothing protected, so a word left
+  // half-written and abandoned is still checked.
   clearTimeout(settleTimer);
   settleTimer = setTimeout(() => {
     if (ws && ws.readyState === WebSocket.OPEN)
@@ -323,8 +341,7 @@ function localChanged(){
 }
 paper.addEventListener("input", localChanged);
 
-// Clicking or arrowing away from a word finishes it, so check immediately
-// rather than waiting for the idle timer.
+// Clicking or arrowing away finishes the word, so check it now.
 paper.addEventListener("blur", () => {
   if (ws && ws.readyState === WebSocket.OPEN)
     ws.send(JSON.stringify({type:"settle"}));
@@ -334,25 +351,26 @@ paper.addEventListener("blur", () => {
 
 function applyRemote(op, isMine){
   if (isMine){
-    // Our own edit coming back. Drop it from pending; the text already has it.
-    pending.shift();
+    // Our own edit came back. The screen already has it; only the shadow moves.
     shadow = applyOp(shadow, op);
+    outstanding = null;
+    sendIfIdle();          // anything typed while waiting goes now, as one edit
     return;
   }
-  // Somebody else's edit. Adjust it for anything of ours still in flight,
-  // apply it to what is on screen, and move our caret out of the way.
-  let incoming = op;
-  const rebased = [];
-  for (const mineOp of pending){
-    rebased.push(transform(mineOp, incoming));
-    incoming = transform(incoming, mineOp);
-  }
-  pending = rebased;
 
-  const before = paper.selectionStart, after = paper.selectionEnd;
+  // Somebody else's edit. Adjust it for our own edit still in flight, apply it
+  // to the screen, and move our caret out of its way.
+  let incoming = op;
+  if (outstanding){
+    const rebased = transform(outstanding, incoming);
+    incoming = transform(incoming, outstanding);
+    outstanding = rebased;
+  }
+
+  const from = paper.selectionStart, to = paper.selectionEnd;
   paper.value = applyOp(paper.value, incoming);
   shadow = applyOp(shadow, op);
-  paper.setSelectionRange(moveCaret(before, incoming), moveCaret(after, incoming));
+  paper.setSelectionRange(moveCaret(from, incoming), moveCaret(to, incoming));
   grow();
   countWords();
 }
@@ -379,13 +397,13 @@ function connect(){
     }
 
     else if (m.type === "op"){
-      const mine = pending.length > 0 && m.by === me && !m.filtered;
+      const mine = outstanding !== null && m.by === me && !m.filtered;
       applyRemote(m.op, mine);
       version = m.version;
       if (m.filtered) { paper.classList.add("flash");
                         setTimeout(() => paper.classList.remove("flash"), 500); }
       // Safety net: if we have drifted from the server, ask for the truth.
-      if (typeof m.len === "number" && pending.length === 0
+      if (typeof m.len === "number" && outstanding === null
           && paper.value.length !== m.len){
         ws.send(JSON.stringify({type:"sync"}));
       }
