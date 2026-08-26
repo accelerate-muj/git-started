@@ -1,11 +1,17 @@
-# Chaos Draft server.
-# Python 3.9 or newer.
+# Chaos Draft server. Python 3.9 or newer.
 #
 #   pip install -r requirements.txt
 
 fastapi>=0.100
-uvicorn>=0.23
 
-# Only needed for the optional --audit second opinion via ollama.
-# aiohttp>=3.9
+# MUST be uvicorn[standard], not plain uvicorn.
+#
+# Plain uvicorn does not pull in a WebSocket library, and this whole app is
+# WebSockets, so it installs cleanly, starts cleanly, and then rejects every
+# connection. It worked in development only because this machine happened to
+# have `websockets` installed for something else. Verified in a clean venv:
+# with plain uvicorn, both `websockets` and `wsproto` are absent.
+uvicorn[standard]>=0.23
+
+# The join QR, in the terminal and on the page.
 qrcode>=7.4
