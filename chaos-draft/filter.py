@@ -310,7 +310,7 @@ class Dictionary:
             return True
         return False
 
-    def scan(self, text: str) -> list[tuple[int, int, str]]:
+    def scan(self, text: str, typing_at: int | None = None) -> list[tuple[int, int, str]]:
         """
         Find every span of `text` that has to be removed, as (start, end, why).
 
@@ -326,6 +326,18 @@ class Dictionary:
            allowlisted, "ke" is a postposition, and only the third word is
            blockable. Removing just that word leaves "behen ke" sitting in the
            document reading exactly like what it is.
+
+        `typing_at` is a cursor position whose word is left alone, because it is
+        half-written rather than finished. Without it the filter judges every
+        prefix as you type and eats perfectly ordinary words partway through:
+
+            assignment   ..X.......   deleted at "ass"
+            analysis     ...X....     deleted at "anal"
+            titanic      ..X....      deleted at "tit"
+            cocktail     ...X....     deleted at "cock"
+
+        The word is checked the moment the cursor leaves it, so nothing is
+        skipped, it is only deferred until you have finished typing it.
         """
         spans: list[tuple[int, int, str]] = []
 
@@ -334,7 +346,13 @@ class Dictionary:
         if not tokens:
             return spans
 
+        def being_typed(start: int, end: int) -> bool:
+            """Is the cursor inside this span, making it half-written?"""
+            return typing_at is not None and start <= typing_at <= end
+
         for start, end, tok in tokens:
+            if being_typed(start, end):
+                continue
             if self.check(tok).decision is not Decision.ALLOW:
                 spans.append((start, end, tok))
 
@@ -345,9 +363,12 @@ class Dictionary:
             for phrase in self.phrases:
                 plen = len(phrase)
                 for i in range(n - plen + 1):
-                    if keys[i:i + plen] == phrase:
-                        spans.append((tokens[i][0], tokens[i + plen - 1][1],
-                                      " ".join(phrase)))
+                    if keys[i:i + plen] != phrase:
+                        continue
+                    first, last = tokens[i][0], tokens[i + plen - 1][1]
+                    if being_typed(first, last):
+                        continue
+                    spans.append((first, last, " ".join(phrase)))
 
         if not spans:
             return spans

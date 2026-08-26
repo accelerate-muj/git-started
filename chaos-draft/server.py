@@ -107,7 +107,8 @@ class Room:
 
     # -- editing ------------------------------------------------------------
 
-    async def edit(self, ws: WebSocket, name: str, raw_op: dict, base: int) -> None:
+    async def edit(self, ws: WebSocket, name: str, raw_op: dict, base: int,
+                   cursor: int | None = None) -> None:
         async with self.lock:
             base = max(0, min(base, self.version))
             op = Op.from_json(raw_op)
@@ -126,7 +127,7 @@ class Room:
                                   "version": self.version, "by": name,
                                   "len": len(self.doc)})
 
-            removals, removed_words, micros = self._scrub()
+            removals, removed_words, micros = self._scrub(cursor)
 
         for op in removals:
             await self.broadcast({"type": "op", "op": op.to_json(),
@@ -146,16 +147,23 @@ class Room:
         if len(self.history) > MAX_HISTORY:
             await self.resync_all()
 
-    def _scrub(self) -> tuple[list[Op], list[str], int]:
+    def _scrub(self, cursor: int | None = None) -> tuple[list[Op], list[str], int]:
         """
         Delete anything blocked from the document.
 
         Runs inside the lock, straight after an edit lands. Returns the delete
         operations it made so they can be broadcast like any other edit.
         Right to left, so earlier offsets stay valid as later ones are removed.
+
+        `cursor` is where the person who just typed has their caret. The word it
+        sits in is left alone, because it is half-written. Otherwise the filter
+        judges every prefix and eats ordinary words partway through: "assignment"
+        disappears at "ass", "analysis" at "anal". It is checked as soon as they
+        move off it, and a settle pass with no cursor catches anything left when
+        they stop typing.
         """
         self.dictionary.reload_if_changed()
-        spans = self.dictionary.scan(self.doc)
+        spans = self.dictionary.scan(self.doc, typing_at=cursor)
         if not spans:
             return [], [], 0
 
@@ -181,6 +189,24 @@ class Room:
 
         words.reverse()
         return ops, words, micros
+
+    async def settle(self, ws: WebSocket, name: str) -> None:
+        """Re-scan with nothing protected, once somebody stops typing."""
+        async with self.lock:
+            removals, words, micros = self._scrub(None)
+        for op in removals:
+            await self.broadcast({"type": "op", "op": op.to_json(),
+                                  "version": self.version, "by": "filter",
+                                  "len": len(self.doc), "filtered": True})
+        if words:
+            self.blocked_count += len(words)
+            await self.send(ws, {"type": "scrubbed", "removed": words,
+                                 "micros": micros})
+            await self.broadcast({"type": "blocked_count",
+                                  "blocked": self.blocked_count})
+            for host in list(self.hosts):
+                await self.send(host, {"type": "caught", "words": words,
+                                       "author": name, "micros": micros})
 
     async def resync_all(self) -> None:
         async with self.lock:
@@ -325,8 +351,14 @@ def make_app(room: Room, host_key: str, port: int,
                     continue
 
                 elif kind == "op":
+                    raw_cursor = msg.get("cursor")
                     await room.edit(ws, name, msg.get("op", {}),
-                                    int(msg.get("base", 0)))
+                                    int(msg.get("base", 0)),
+                                    None if raw_cursor is None else int(raw_cursor))
+                elif kind == "settle":
+                    # Typing stopped. Re-check with no word protected, so a word
+                    # left half-typed and then abandoned is still caught.
+                    await room.settle(ws, name)
                 elif kind == "sync":
                     await room.send(ws, room.snapshot())
 

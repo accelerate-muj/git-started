@@ -152,6 +152,39 @@ def test_phrases(d: Dictionary) -> int:
     return len(wrong)
 
 
+# Typing a word letter by letter must not have it eaten partway through.
+# "assignment" was disappearing at "ass", "analysis" at "anal".
+TYPING_CASES = ["assignment", "analysis", "titanic", "cocktail", "shiitake",
+                "classic", "passenger", "grasshopper", "document", "peacock"]
+
+
+def test_typing(d: Dictionary) -> int:
+    """No ordinary word may be removed while it is still being typed."""
+    eaten = []
+    for word in TYPING_CASES:
+        for i in range(1, len(word) + 1):
+            prefix = word[:i]
+            if d.scan(prefix, typing_at=len(prefix)):
+                eaten.append((word, prefix))
+                break
+
+    # And the protection must not become a hole: a real term still goes once
+    # the cursor leaves it.
+    leaked = [w for w in ("madharchod ", "chutiya ", "behen ke lode ")
+              if not d.scan(w, typing_at=len(w))]
+
+    print("\n" + "=" * 70)
+    print("  TYPING (words must survive being half-written)")
+    print("=" * 70)
+    print(f"  ordinary words safe while typing   {len(TYPING_CASES) - len(eaten)}/{len(TYPING_CASES)}")
+    print(f"  blocked terms still caught after   {3 - len(leaked)}/3")
+    for word, prefix in eaten:
+        print(f"    {word!r} eaten at {prefix!r}")
+    for w in leaked:
+        print(f"    {w!r} LEAKED after the cursor moved on")
+    return len(eaten) + len(leaked)
+
+
 def test_collisions(d: Dictionary) -> int:
     """The dictionary must not touch ordinary vocabulary."""
     bad = collision_audit(d)
@@ -239,7 +272,7 @@ async def main() -> None:
 
     d = Dictionary()
     failures = (test_dictionary(d, cases) + test_phrases(d)
-                + test_collisions(d))
+                + test_typing(d) + test_collisions(d))
 
     if args.ai or args.compare or args.model:
         from filter import Auditor

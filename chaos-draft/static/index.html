@@ -294,20 +294,41 @@ function setDoc(text, v){
 
 /* ---------- sending local edits ---------- */
 
-let sendTimer = null;
+let sendTimer = null, settleTimer = null;
+
 function localChanged(){
   grow();
   countWords();
+
   clearTimeout(sendTimer);
   sendTimer = setTimeout(() => {
     const op = diff(shadow, paper.value);
     if (!op || !ws || ws.readyState !== WebSocket.OPEN) return;
     shadow = paper.value;
     pending.push(op);
-    ws.send(JSON.stringify({type:"op", op, base: version}));
+    // The caret goes with the edit so the server can leave the word being typed
+    // alone. Without it the filter judges half-typed words and eats ordinary
+    // ones partway through: "assignment" vanishes at "ass".
+    ws.send(JSON.stringify({type:"op", op, base: version,
+                            cursor: paper.selectionStart}));
   }, 90);
+
+  // Typing stopped. Ask for one more pass with nothing protected, so a word left
+  // half-written and then abandoned is still checked.
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({type:"settle"}));
+  }, 700);
 }
 paper.addEventListener("input", localChanged);
+
+// Clicking or arrowing away from a word finishes it, so check immediately
+// rather than waiting for the idle timer.
+paper.addEventListener("blur", () => {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({type:"settle"}));
+});
 
 /* ---------- receiving ---------- */
 
