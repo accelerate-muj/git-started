@@ -27,6 +27,24 @@ to wake. Chaos Draft runs in the first fifteen minutes of the session, so open t
 URL yourself while people are settling in. It will be warm by the time the QR is
 on the projector.
 
+### Set a host key that survives restarts
+
+**Do this straight after the first deploy.** On a host the filesystem is
+ephemeral: the container is rebuilt on every deploy, and free instances are torn
+down when they sleep. A key saved to disk is regenerated each time, so the host
+link you wrote down quietly stops working, usually right when you need it.
+
+In Render: **Environment** &rarr; **Add Environment Variable**
+
+    CHAOS_HOST_KEY = something-long-nobody-will-guess
+
+Your host link is then that value, forever:
+
+    https://chaos-draft.onrender.com/?key=something-long-nobody-will-guess
+
+Pick something actually unguessable. Anyone with it can wipe the page for the
+whole room.
+
 ### If GitHub sign-in will not work
 
 Almost always the browser, not Render or GitHub. In rough order:

@@ -436,6 +436,15 @@ def host_key_for_run(explicit: str | None, rotate: bool) -> tuple[str, str]:
     """
     if explicit:
         return explicit, "from --host-key"
+
+    # On a hosting provider the filesystem is ephemeral: the container is rebuilt
+    # on every deploy, and free instances are torn down when they sleep. A key
+    # saved to disk there is regenerated each time, so the host link you wrote
+    # down silently stops working. An environment variable survives all of that.
+    from_env = os.environ.get("CHAOS_HOST_KEY", "").strip()
+    if from_env:
+        return from_env, "from CHAOS_HOST_KEY"
+
     if rotate and KEY_FILE.exists():
         KEY_FILE.unlink()
     if KEY_FILE.exists():
