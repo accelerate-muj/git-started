@@ -27,7 +27,16 @@ many words were removed, but never which ones.
 
 ---
 
-## Running it
+## Where to run it
+
+For more than about eight people, [put it on the internet](DEPLOY.md). A laptop
+hotspot caps at 8 devices and a phone at about 10, so everyone joining one local
+network does not scale to a full room. Hosted, each person reaches it on their own
+mobile data and no shared wifi is needed at all.
+
+Locally is still fine for testing or a small group:
+
+## Running it locally
 
 ```bash
 cd chaos-draft
