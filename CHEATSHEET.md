@@ -40,6 +40,7 @@ with it.
 |---|---|
 | `git branch` | List branches |
 | `git switch -c <name>` | Make a branch and move to it |
+| `git checkout -b <name>` | The older spelling of the same thing |
 | `git switch <name>` | Move to an existing branch |
 | `git merge <name>` | Pull another branch's work into this one |
 | `git branch -d <name>` | Delete a branch you have finished with |
@@ -52,13 +53,19 @@ it does two unrelated jobs and that is exactly why it confused everyone for a de
 | Command | What it does |
 |---|---|
 | `git remote -v` | Which GitHub repos does this folder talk to |
-| `git fetch origin` | Download their commits, change nothing locally |
+| `git remote add <name> <url>` | Save a long URL under a short name |
+| `git fetch <remote>` | Download their commits, change nothing locally |
+| `git merge <remote>/main` | Merge what you just fetched into your branch |
 | `git pull` | Fetch, then merge into your branch |
 | `git push` | Send your commits up |
 | `git push -u origin <branch>` | Push a new branch and remember the pairing |
 
 `fetch` is safe and never changes your files. `pull` is `fetch` plus a merge, which
 can conflict. When you want to know what changed upstream without any risk, fetch.
+
+Remote names are per folder, not global. Every repo has its own `.git/config`, so
+every folder gets its own `origin`. By convention `origin` is your fork and
+`upstream` is the project you forked from.
 
 ## Conflicts
 
@@ -93,6 +100,28 @@ because GitHub exists.
 | Merge one | `gh pr merge <number>` |
 | Open the repo in a browser | `gh repo view --web` |
 | Anything GitHub's API can do | `gh api ...` |
+
+### Building `gh pr create`
+
+The base command is `gh pr create`. Every flag answers one question GitHub still
+has. With `upstream` configured, it works out the destination repo, the source
+branch and the target branch on its own, so most of these are optional.
+
+| Flag | Answers |
+|---|---|
+| `--title` | The line shown in the pull request list |
+| `--body` | The description underneath it |
+| `--fill` | Use my last commit message for both |
+| `--draft` | Not finished. Cannot merge until marked ready |
+| `--reviewer <user>` | Ask a specific person to look |
+| `--assignee <user>` | Put it in somebody's name |
+| `--label <label>` | Tag it |
+| `--web` | Fill the form in a browser instead of the terminal |
+| `--repo <owner>/<repo>` | Force the destination when `gh` guesses wrong |
+
+A pull request is a **comparison between two branches that are already on GitHub**,
+not an upload. That is why the order is always commit, then push, then PR. If your
+work is only on your laptop there is nothing for GitHub to compare.
 
 ---
 

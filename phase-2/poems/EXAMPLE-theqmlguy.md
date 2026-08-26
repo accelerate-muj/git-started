@@ -37,3 +37,7 @@
 original is *"When in eternal lines to time thou grow'st"*, and Shakespeare's whole
 argument is that writing something down is what saves it from time. Which is not a
 bad description of what you are doing every time you type `git commit`.
+
+---
+
+Written by theqmlguy

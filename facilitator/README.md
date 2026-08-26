@@ -15,6 +15,10 @@ The split:
 |---|---|
 | [phase-1-script.md](phase-1-script.md) | The opening. Why version control exists, told through one poem and a folder full of `_final` files. |
 
+Phase 2 and Phase 3 keep their delivery notes at the bottom of their own phase
+READMEs, under **Running this phase**, rather than in a separate file here:
+[phase-2](../phase-2/README.md#running-this-phase), [phase-3](../phase-3/README.md).
+
 ## Timing
 
 | Block | Minutes |
@@ -26,6 +30,6 @@ The split:
 | Phase 3 | 50 |
 | Rabbit Holes, what next | 5 |
 
-Buffer generously in Phase 2. Somebody will clone the wrong repo, and somebody
-will forget `--repo` on their pull request. Both are in the handbook's Help table,
-so point rather than solve.
+Buffer generously in Phase 2. Somebody will clone the wrong repo instead of forking
+it, and somebody will end up running commands in the wrong folder. Both are in the
+handbook's Help table, so point rather than solve.

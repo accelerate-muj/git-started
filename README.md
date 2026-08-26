@@ -84,7 +84,8 @@ The numbered copy lives in [`poem/sonnet-18.md`](poem/sonnet-18.md).
 ## What you actually learn
 
 **git**, the tool on your computer: `init`, `add`, `commit`, `status`, `log`,
-`switch`, `branch`, `merge`, `rebase`, `fetch`, `pull`, `push`, `remote`, `diff`.
+`switch`, `checkout`, `branch`, `merge`, `rebase`, `fetch`, `pull`, `push`, `remote`,
+`diff`.
 
 **gh**, the tool that talks to GitHub: `auth login`, `repo create`, `repo fork`,
 `repo sync`, `pr create`, `pr list`, `pr view`, `pr checkout`, `pr merge`, `api`.
@@ -113,10 +114,13 @@ of git.
 
 ## Running this workshop
 
-If you are teaching rather than attending, see [phase-3/README.md](phase-3/README.md)
-for the conflict mechanism and why it fires reliably, and
-[CONTRIBUTING.md](CONTRIBUTING.md) for the rule that keeps thirty simultaneous
-pull requests from colliding.
+If you are teaching rather than attending, start with
+[`facilitator/`](facilitator/) for the Phase 1 opening and the running order. Each
+later phase keeps its own delivery notes at the bottom of its README, under
+**Running this phase**: see [phase-2](phase-2/README.md#running-this-phase) for the
+beat by beat, and [phase-3/README.md](phase-3/README.md) for the conflict mechanism
+and why it fires reliably. [CONTRIBUTING.md](CONTRIBUTING.md) has the rule that
+keeps thirty simultaneous pull requests from colliding.
 
 See [`handbook/`](handbook/) for the thirteen-phase PDF handbook.
 

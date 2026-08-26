@@ -317,48 +317,97 @@ upstream. Without it: <code>git push -u origin main</code> once.</p></div>
 <a href="https://github.com/accelerate-muj/git-started" target="_blank" rel="noopener">accelerate-muj/git-started</a></div>
 
 <div class="step"><span class="lbl">1</span>
+<h3>Try it the obvious way. It fails.</h3>
+<div class="cmd"><pre data-cmd="git clone https://github.com/accelerate-muj/git-started.git
+cd git-started
+echo &quot;test&quot; >> README.md
+git commit -am &quot;Try to edit&quot;
+git push origin main"></pre><button class="cp">copy</button></div>
+<p class="tip"><code>Permission denied</code>. You got read, not write, so your work
+is stuck on your laptop. Now <code>cd ..</code> and delete that folder, or you will
+spend ten minutes typing into the wrong one.</p></div>
+
+<div class="step"><span class="lbl">2</span>
 <h3>Fork and clone in one</h3>
 <div class="cmd"><pre data-cmd="gh repo fork accelerate-muj/git-started --clone
 cd git-started
 git remote -v"></pre><button class="cp">copy</button></div>
-<p class="tip">Must show <strong>your</strong> username on <code>origin</code>, and
-<code>accelerate-muj</code> on <code>upstream</code>.</p></div>
+<p class="tip">Fork is GitHub's <strong>File &rarr; Make a Copy</strong>. Must show
+<strong>your</strong> username on <code>origin</code>, and <code>accelerate-muj</code>
+on <code>upstream</code>.</p></div>
 
-<div class="step"><span class="lbl">2</span>
+<div class="step"><span class="lbl">3</span>
 <h3>If you forked with the web button instead</h3>
 <div class="cmd"><pre data-cmd="gh repo clone {{user}}/git-started
 cd git-started
 git remote add upstream https://github.com/accelerate-muj/git-started.git"></pre><button class="cp">copy</button></div>
-<p class="tip"><code>origin</code> = your fork, you can push. <code>upstream</code>
-= ours, fetch only.</p></div>
+<p class="tip">A remote is a long URL saved under a short name, like
+<code>Mom</code> in your phone. <code>origin</code> = your fork, you can push.
+<code>upstream</code> = ours, fetch only.</p></div>
 
-<div class="step"><span class="lbl">3</span>
+<div class="step"><span class="lbl">4</span>
 <h3>Sync, then branch</h3>
 <div class="cmd"><pre data-cmd="git fetch upstream
 git merge upstream/main
-git switch -c poem/{{user}}"></pre><button class="cp">copy</button></div></div>
-
-<div class="step"><span class="lbl">4</span>
-<h3>Make your file</h3>
-<div class="cmd"><pre data-cmd="echo &quot;# Sonnet 18, by {{name}}&quot; > phase-2/poems/{{user}}.md"></pre><button class="cp">copy</button></div>
-<p class="tip">Filename must be your GitHub username. Open it and write your version:
-modern English, Hindi, a parody, anything.</p></div>
+git checkout -b add-{{user}}
+git branch"></pre><button class="cp">copy</button></div>
+<p class="tip">&quot;Already up to date&quot; is a fine answer. The <code>*</code> in
+<code>git branch</code> confirms where you are. Modern equivalent:
+<code>git switch -c add-{{user}}</code>.</p></div>
 
 <div class="step"><span class="lbl">5</span>
-<h3>Commit and push to your fork</h3>
-<div class="cmd"><pre data-cmd="git add phase-2/poems/{{user}}.md
-git commit -m &quot;Add {{name}}'s take on Sonnet 18&quot;
-git push -u origin poem/{{user}}"></pre><button class="cp">copy</button></div>
-<p class="tip"><code>git add .</code> needs the space. <code>git add.</code>
-fails.</p></div>
+<h3>Make your file, then sign it</h3>
+<div class="cmd"><pre data-cmd="echo &quot;Hi, I'm {{name}}. I'm learning Git at this workshop!&quot; > phase-2/poems/{{user}}.md"></pre><button class="cp">copy</button></div>
+<p class="tip">Filename must be your GitHub username. Open it, write your version of
+Sonnet 18 &mdash; modern English, Hindi, a parody, anything &mdash; and end it with
+<code>Written by {{name}}</code>.</p>
+<div class="warn"><b>Only this one file</b>
+Do not sign <code>poem/sonnet-18.md</code> or edit anything else. One file per
+username is what stops thirty pull requests colliding. Shared files are Phase 3.</div></div>
 
 <div class="step"><span class="lbl">6</span>
-<h3>Open the PR</h3>
-<div class="cmd"><pre data-cmd="gh pr create --repo accelerate-muj/git-started --title &quot;Add {{name}}&quot; --body &quot;Added my poem file.&quot;"></pre><button class="cp">copy</button></div>
-<div class="warn"><b>Do not drop <code>--repo</code></b>
-Without it the PR opens against your own fork and nothing reaches us.</div></div>
+<h3>Look at what changed</h3>
+<div class="cmd"><pre data-cmd="git status
+git diff
+git add .
+git diff --staged"></pre><button class="cp">copy</button></div>
+<p class="tip">The first <code>git diff</code> shows <em>nothing</em>. It only watches
+files git already tracks, and yours is brand new. After <code>git add</code> every
+line appears with a <code>+</code>, and <code>+</code> means addition.</p></div>
 
 <div class="step"><span class="lbl">7</span>
+<h3>Commit, then push to your fork</h3>
+<div class="cmd"><pre data-cmd="git commit -m &quot;Add {{name}}'s take on Sonnet 18&quot;
+git log --oneline -1
+git push -u origin add-{{user}}"></pre><button class="cp">copy</button></div>
+<p class="tip"><code>-u</code> links this branch to that remote branch once, so from
+then on bare <code>git push</code> works. <code>git add .</code> needs the space;
+<code>git add.</code> fails.</p></div>
+
+<div class="step"><span class="lbl">8</span>
+<h3>Open the PR</h3>
+<div class="cmd"><pre data-cmd="gh pr create --title &quot;Add {{name}}&quot; --body &quot;Added my poem file and signed it.&quot;
+gh pr list"></pre><button class="cp">copy</button></div>
+
+<table class="flags">
+<tr><th>Flag</th><th>Answers</th></tr>
+<tr><td><code>--title</code></td><td>the line shown in the PR list</td></tr>
+<tr><td><code>--body</code></td><td>the description under it</td></tr>
+<tr><td><code>--fill</code></td><td>use my last commit message for both</td></tr>
+<tr><td><code>--draft</code></td><td>unfinished, cannot merge yet</td></tr>
+<tr><td><code>--reviewer</code></td><td>ask a specific person to look</td></tr>
+<tr><td><code>--web</code></td><td>fill the form in a browser instead</td></tr>
+<tr><td><code>--repo</code></td><td>force the destination if <code>gh</code> guesses wrong</td></tr>
+</table>
+<p class="tip">Because <code>upstream</code> is set, <code>gh</code> already knows the
+repo, the source branch and the destination. <code>gh pr create --fill</code> is the
+shortest version that works.</p>
+
+<div class="warn"><b>Push before you PR</b>
+A pull request is a comparison between two branches that are already on GitHub, not
+an upload. The order is fixed: commit &rarr; push &rarr; PR.</div></div>
+
+<div class="step"><span class="lbl">9</span>
 <h3>After it merges</h3>
 <div class="cmd"><pre data-cmd="git switch main
 gh repo sync {{user}}/git-started
@@ -464,10 +513,16 @@ git log --oneline --graph --all"></pre><button class="cp">copy</button></div></d
     <td><code>cd</code> into the project folder. <code>pwd</code> shows where you are.</td></tr>
 
 <tr><td><code>error: pathspec did not match</code></td>
-    <td>Missing <code>-c</code>: <code>git switch -c add-{{name}}</code></td></tr>
+    <td>Missing <code>-c</code>: <code>git switch -c &lt;branch&gt;</code> makes a new
+    one, without it git looks for an existing one</td></tr>
+
+<tr><td><code>git diff</code> shows nothing, Phase 2</td>
+    <td>Correct. It only watches tracked files and yours is new.
+    <code>git add .</code> then <code>git diff --staged</code></td></tr>
 
 <tr><td>PR opened against your own fork</td>
-    <td>Add <code>--repo accelerate-muj/git-started</code></td></tr>
+    <td><code>gh</code> guessed wrong. Force it:
+    <code>--repo accelerate-muj/git-started</code></td></tr>
 
 <tr><td><code>remote upstream already exists</code></td>
     <td>Harmless. Ignore it.</td></tr>

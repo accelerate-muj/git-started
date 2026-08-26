@@ -13,13 +13,21 @@ phase-2/poems/<your-github-username>.md
 ```
 
 Nothing else in the same pull request. Do not edit anyone else's file, the phase
-READMEs, or anything at the root.
+READMEs, `poem/sonnet-18.md`, or anything at the root. Your version of the sonnet
+and the `Written by <your-name>` line that signs it both go inside that one file.
 
 The rule exists for a mechanical reason. Thirty people are submitting at the same
 time, and GitHub usernames are unique, so if everyone only ever touches their own
 file then no two pull requests can overlap and every one of them merges cleanly.
 Break the rule and you will conflict with somebody, which is a fine thing to
-experience but it is Phase 3's job, not Phase 2's.
+experience but it is Phase 3's job, not Phase 2's. Signing a shared file rather than
+your own is the usual way people trip over this.
+
+Work on a branch named after you, not on `main`:
+
+```bash
+git checkout -b add-<your-github-username>
+```
 
 A bot comments on your pull request telling you whether the filename is right. It
 does not block anything. If it complains about the name:
@@ -91,7 +99,7 @@ when a phase is finalised, and PDFs in a diff are noise nobody can review.
 Say what changed, in the imperative, on one line under about seventy characters.
 
 ```
-Fix gh auth flag in Phase 2 step 5
+Fix gh auth flag in Phase 2 step 6
 Add Marathi translation
 Explain why force-with-lease is not force
 ```
