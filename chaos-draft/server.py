@@ -70,6 +70,7 @@ class Room:
         self.clients: dict[WebSocket, str] = {}
         self.hosts: set[WebSocket] = set()
         self.cursors: dict[str, int] = {}
+        self.credits: list[dict] = []      # who added what, newest last
         self.blocked_count = 0
         self.dictionary = Dictionary()
         self.lock = asyncio.Lock()
@@ -99,6 +100,8 @@ class Room:
             "version": self.version,
             "users": sorted(set(self.clients.values())),
             "blocked": self.blocked_count,
+            "cursors": self.cursors,
+            "credits": self.credits[-60:],
         }
 
     async def broadcast_presence(self) -> None:
@@ -152,9 +155,23 @@ class Room:
             self.history.append(op)
             self.version += 1
 
+        # Who wrote what. Shown in the sidebar, which is the point: a name next
+        # to every contribution is a far better deterrent than any filter.
+        added = op.i.strip()
+        if added:
+            async with self.lock:
+                if self.credits and self.credits[-1]["who"] == name and                         len(self.credits[-1]["text"]) < 120:
+                    self.credits[-1]["text"] += " " + added
+                else:
+                    self.credits.append({"who": name, "text": added})
+                self.credits = self.credits[-200:]
+                entry = dict(self.credits[-1])
+
         await self.broadcast({"type": "op", "op": op.to_json(),
                               "version": self.version, "by": name,
                               "len": len(self.doc)})
+        if added:
+            await self.broadcast({"type": "credit", "credit": entry})
 
         if len(self.history) > MAX_HISTORY:
             await self.resync_all()
@@ -313,6 +330,14 @@ class Room:
                 await self.send(host, {"type": "caught", "words": words,
                                        "author": name, "micros": micros})
 
+    async def move_caret(self, name: str, at) -> None:
+        """Tell everyone where this person is working."""
+        if at is None:
+            self.cursors.pop(name, None)
+        else:
+            self.cursors[name] = max(0, min(int(at), len(self.doc)))
+        await self.broadcast({"type": "carets", "cursors": self.cursors})
+
     async def resync_all(self) -> None:
         async with self.lock:
             self.history.clear()
@@ -327,6 +352,8 @@ class Room:
             self.history.clear()
             self.version = 0
             self.blocked_count = 0
+            self.credits.clear()
+            self.cursors.clear()
         await self.broadcast(self.snapshot())
 
     async def learn(self, term: str) -> bool:
@@ -466,6 +493,8 @@ def make_app(room: Room, host_key: str, port: int,
                     await room.settle(ws, name)
                 elif kind == "sync":
                     await room.send(ws, room.snapshot())
+                elif kind == "caret":
+                    await room.move_caret(name, msg.get("at"))
 
                 elif is_host and kind == "reset":
                     await room.reset()
@@ -482,6 +511,11 @@ def make_app(room: Room, host_key: str, port: int,
             room.clients.pop(ws, None)
             room.hosts.discard(ws)
             if name:
+                still_here = name in room.clients.values()
+                if not still_here:
+                    room.cursors.pop(name, None)
+                    await room.broadcast({"type": "carets",
+                                          "cursors": room.cursors})
                 await room.broadcast_presence()
 
     return app

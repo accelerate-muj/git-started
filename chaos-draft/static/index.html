@@ -76,6 +76,16 @@
   @keyframes flash{0%,100%{background:transparent}
     35%{background:rgba(184,35,31,.12)}}
 
+  /* ---------- other people's carets ---------- */
+  #papershell{position:relative}
+  #mirror{position:absolute;inset:0;visibility:hidden;pointer-events:none;
+    white-space:pre-wrap;word-wrap:break-word;overflow:hidden}
+  .caret{position:absolute;width:2px;pointer-events:none;z-index:3;
+    transition:transform .12s ease, top .12s ease, left .12s ease}
+  .caret .flag{position:absolute;top:-17px;left:-1px;white-space:nowrap;
+    font-family:var(--sans);font-size:10.5px;font-weight:600;line-height:1;
+    padding:3px 6px;border-radius:4px 4px 4px 0;color:var(--card)}
+
   /* ---------- sidebar ---------- */
   aside{width:230px;border-left:1.5px solid var(--border);background:var(--card);
     padding:20px 18px;overflow-y:auto;flex-shrink:0}
@@ -94,6 +104,12 @@
   .caught .cby{color:rgba(33,29,22,.55);font-size:10.5px;margin-top:2px}
   .quiet{font-family:var(--sans);font-size:12px;color:rgba(33,29,22,.5);
     font-style:italic}
+  #credits{display:flex;flex-direction:column;gap:7px;max-height:38vh;
+    overflow-y:auto;margin-bottom:4px}
+  .credit{font-size:13.5px;line-height:1.4}
+  .credit .who{font-family:var(--sans);font-size:10.5px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.06em;display:block}
+  .credit .said{color:rgba(33,29,22,.8);word-break:break-word}
   #hosthint{margin-top:18px;padding-top:14px;border-top:1.5px solid var(--border);
     font-family:var(--sans);font-size:11.5px;color:rgba(33,29,22,.6);line-height:1.6}
   #learnbox{display:flex;gap:6px;margin-top:10px}
@@ -159,14 +175,20 @@
     <div id="sheet">
       <div id="doctitle">Accelerate &middot; Workshop 3</div>
       <div id="docsub">A story by everyone in the room, written all at once.</div>
-      <textarea id="paper" spellcheck="false" autocomplete="off"
-        placeholder="Start typing. So will everyone else, in the same place."></textarea>
+      <div id="papershell">
+        <div id="mirror" aria-hidden="true"></div>
+        <textarea id="paper" spellcheck="false" autocomplete="off"
+          placeholder="Start typing. So will everyone else, in the same place."></textarea>
+      </div>
     </div>
   </div>
 
   <aside>
     <h2>Here now</h2>
     <div id="people"></div>
+
+    <h2 style="margin-top:24px">Who wrote what</h2>
+    <div id="credits"><div class="quiet">Nothing yet.</div></div>
     <div id="hostpanel">
       <h2 style="margin-top:24px">Stopped by the filter</h2>
       <div id="caught"><div class="quiet">Nothing yet.</div></div>
@@ -271,6 +293,105 @@ function countWords(){
   $("n-words").textContent = (paper.value.trim().match(/\S+/g) || []).length;
 }
 
+/* ----------------------------------------------------------------------
+   Other people's carets.
+
+   A textarea cannot hold anything else inside it, so the position of a caret
+   is measured with a mirror: a hidden div with exactly the same font, width and
+   wrapping, containing the text up to that offset plus a marker. Wherever the
+   marker lands is where the caret goes.
+
+   Seeing a name hovering where somebody is working is most of the point. People
+   behave differently when their writing has their name on it.
+---------------------------------------------------------------------- */
+const MIRROR_PROPS = ["fontFamily","fontSize","fontWeight","lineHeight",
+  "letterSpacing","wordSpacing","padding","border","boxSizing","width",
+  "textIndent","whiteSpace","wordWrap","textTransform"];
+
+function syncMirror(){
+  const m = $("mirror"), cs = getComputedStyle(paper);
+  for (const prop of MIRROR_PROPS) m.style[prop] = cs[prop];
+  m.style.width = paper.clientWidth + "px";
+}
+
+function caretXY(offset){
+  const m = $("mirror");
+  syncMirror();
+  m.textContent = paper.value.slice(0, Math.max(0, Math.min(offset, paper.value.length)));
+  const mark = document.createElement("span");
+  mark.textContent = "​";
+  m.appendChild(mark);
+  const x = mark.offsetLeft, y = mark.offsetTop;
+  const h = parseFloat(getComputedStyle(paper).lineHeight) || 24;
+  m.textContent = "";
+  return {x, y, h};
+}
+
+let carets = {};
+function renderCarets(){
+  for (const el of document.querySelectorAll(".caret")) el.remove();
+  const shell = $("papershell");
+  for (const [who, at] of Object.entries(carets)){
+    if (who === me) continue;
+    const {x, y, h} = caretXY(at);
+    const el = document.createElement("div");
+    el.className = "caret";
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.height = h + "px";
+    el.style.background = colour(who);
+    const flag = document.createElement("div");
+    flag.className = "flag";
+    flag.textContent = who;
+    flag.style.background = colour(who);
+    el.appendChild(flag);
+    shell.appendChild(el);
+  }
+}
+
+let caretTimer = null;
+function reportCaret(){
+  clearTimeout(caretTimer);
+  caretTimer = setTimeout(() => {
+    if (ws && ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({type:"caret", at: paper.selectionStart}));
+  }, 120);
+}
+["keyup","click","input","select"].forEach(ev =>
+  paper.addEventListener(ev, reportCaret));
+
+/* ---------- who wrote what ---------- */
+function addCredit(c, atTop){
+  const box = $("credits");
+  const quiet = box.querySelector(".quiet");
+  if (quiet) quiet.remove();
+
+  // Same person still writing: extend their entry rather than adding another.
+  const first = box.firstElementChild;
+  if (first && first.dataset.who === c.who && !atTop){
+    first.querySelector(".said").textContent = c.text;
+    return;
+  }
+  const row = document.createElement("div");
+  row.className = "credit";
+  row.dataset.who = c.who;
+  const who = document.createElement("span");
+  who.className = "who";
+  who.textContent = c.who;
+  who.style.color = colour(c.who);
+  const said = document.createElement("span");
+  said.className = "said";
+  said.textContent = c.text;          // textContent, never innerHTML
+  row.append(who, said);
+  box.prepend(row);
+  while (box.children.length > 40) box.lastChild.remove();
+}
+
+function renderCredits(list){
+  $("credits").innerHTML = '<div class="quiet">Nothing yet.</div>';
+  for (const c of list) addCredit(c, true);
+}
+
 function renderPeople(users){
   $("who").textContent = users.length === 1 ? "1 person" : users.length + " people";
   $("people").innerHTML = users.map(u => `
@@ -340,20 +461,37 @@ function sendIfIdle(){
   The wait is one round trip on the space bar, about 15ms on a laptop and well
   under a tenth of a second hosted, so it does not read as a delay.
 */
-function finishesAWord(text){
-  return [...text].some(ch => !(/[\p{L}\p{N}]/u.test(ch) || ch === "'" || ch === "-"));
+/*
+  A word is finished by ANY character that is not part of one.
+
+  Space, Enter, comma, full stop, colon, semicolon, brackets, quotes, a slash in
+  a path, an equals in a flag. All of them end a word and all of them trigger the
+  check.
+
+  This looks at the character immediately before the caret rather than at the
+  keystroke, which is the only way to catch every case. Enter arrives as an input
+  event with `data: null` and inputType "insertLineBreak", so testing the
+  keystroke missed it entirely: pressing Enter after a word sent nothing at all.
+  The same is true of autocomplete, dictation and phone keyboards.
+*/
+const WORD_CHAR = /[\p{L}\p{N}'\-]/u;
+
+function justFinishedAWord(){
+  const at = paper.selectionStart;
+  if (at <= 0) return false;
+  return !WORD_CHAR.test(paper.value[at - 1]);
 }
 
 function localChanged(e){
   grow();
   countWords();
 
-  const typed = (e && e.data) || "";
   const deleting = e && String(e.inputType || "").startsWith("delete");
+  const pasted = e && String(e.inputType || "").includes("Paste");
 
-  // Send on a finished word, on paste, or when a deletion joins things up.
-  if (finishesAWord(typed) || deleting || (e && e.inputType === "insertFromPaste"))
-    sendIfIdle();
+  // Deletions are sent so the page stays in step, and they can never be refused:
+  // the server only judges what an edit ADDS, and a deletion adds nothing.
+  if (justFinishedAWord() || deleting || pasted) sendIfIdle();
 }
 paper.addEventListener("input", localChanged);
 
@@ -384,8 +522,10 @@ function applyRemote(op, isMine){
   paper.value = applyOp(paper.value, incoming);
   shadow = applyOp(shadow, op);
   paper.setSelectionRange(moveCaret(from, incoming), moveCaret(to, incoming));
+  for (const who in carets) carets[who] = moveCaret(carets[who], incoming);
   grow();
   countWords();
+  renderCarets();
 }
 
 function connect(){
@@ -405,6 +545,9 @@ function connect(){
       }
       setDoc(m.text, m.version);
       renderPeople(m.users);
+      carets = m.cursors || {};
+      renderCredits(m.credits || []);
+      renderCarets();
       $("n-blocked").textContent = m.blocked;
       paper.focus();
     }
@@ -422,26 +565,25 @@ function connect(){
       }
     }
 
-    // Refused. It never went anywhere, so just put this screen back in step.
+    // Refused. It never reached the page, so take the server's copy verbatim.
+    //
+    // Deliberately NOT clever. An earlier version tried to snip the word out of
+    // the local text and keep everything typed since, which raced with an edit
+    // already in flight and duplicated whole sentences. The server's text is
+    // authoritative and always correct, so use it. At most a couple of
+    // characters typed in the last few milliseconds need retyping, and that
+    // only happens on a word that was being refused anyway.
     else if (m.type === "refused"){
-      const caret = paper.selectionStart;
-      let text = paper.value;
-      for (const w of m.words){
-        const at = text.lastIndexOf(w, caret);
-        if (at !== -1) text = text.slice(0, at) + text.slice(at + w.length);
-      }
-      text = text.replace(/[ 	]{2,}/g, " ");
-      paper.value = text;
       shadow = m.text;
       version = m.version;
       outstanding = null;
-      const put = Math.min(caret, text.length);
-      paper.setSelectionRange(put, put);
+      paper.value = m.text;
+      const end = m.text.length;
+      paper.setSelectionRange(end, end);
       paper.classList.add("flash");
       setTimeout(() => paper.classList.remove("flash"), 500);
       notice(m.words.length === 1 ? "Not that one." : "Not those.", true);
-      grow(); countWords();
-      sendIfIdle();
+      grow(); countWords(); renderCarets();
     }
 
     else if (m.type === "scrubbed"){
@@ -449,6 +591,8 @@ function connect(){
                                     : m.removed.length + " words were removed.", true);
     }
 
+    else if (m.type === "carets"){ carets = m.cursors || {}; renderCarets(); }
+    else if (m.type === "credit") addCredit(m.credit, false);
     else if (m.type === "blocked_count") $("n-blocked").textContent = m.blocked;
     else if (m.type === "presence") renderPeople(m.users);
     else if (m.type === "full") notice("The page is full.", true);
@@ -527,7 +671,7 @@ $("qrwrap").onclick = e => { if (e.target.id === "qrwrap") e.target.classList.re
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") $("qrwrap").classList.remove("on");
 });
-window.addEventListener("resize", grow);
+window.addEventListener("resize", () => { grow(); renderCarets(); });
 </script>
 </body>
 </html>

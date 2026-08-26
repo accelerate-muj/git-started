@@ -185,6 +185,31 @@ def test_typing(d: Dictionary) -> int:
     return len(eaten) + len(leaked)
 
 
+# A word is finished by ANY non-word character, not just a space. "!" was a hole
+# because it is also leetspeak for "i", so "bsdk!" folded to "bsdki".
+TERMINATORS = [" ", "\n", "\t", ",", ".", ":", ";", "!", "?", ")", "]", '"',
+               "’", "/", "="]
+PUNCTUATED_OK = ["hello!", "wizard.", "door,", "yes?", "(brave)", "it's",
+                 "well-known", "read/write", "x=1", "class:", "assignment;"]
+
+
+def test_terminators(d: Dictionary) -> int:
+    """Every terminator must finish a word, and punctuation must not break one."""
+    missed = [t for t in TERMINATORS if not d.scan("bsdk" + t)]
+    broken = [w for w in PUNCTUATED_OK if d.scan(w)]
+
+    print("\n" + "=" * 70)
+    print("  WORD TERMINATORS")
+    print("=" * 70)
+    print(f"  terminators that finish a word   {len(TERMINATORS)-len(missed)}/{len(TERMINATORS)}")
+    print(f"  punctuated ordinary words safe   {len(PUNCTUATED_OK)-len(broken)}/{len(PUNCTUATED_OK)}")
+    for t in missed:
+        print(f"    {t!r} did NOT finish the word")
+    for w in broken:
+        print(f"    {w!r} was wrongly blocked")
+    return len(missed) + len(broken)
+
+
 def test_collisions(d: Dictionary) -> int:
     """The dictionary must not touch ordinary vocabulary."""
     bad = collision_audit(d)
@@ -272,7 +297,8 @@ async def main() -> None:
 
     d = Dictionary()
     failures = (test_dictionary(d, cases) + test_phrases(d)
-                + test_typing(d) + test_collisions(d))
+                + test_typing(d) + test_terminators(d)
+                + test_collisions(d))
 
     if args.ai or args.compare or args.model:
         from filter import Auditor

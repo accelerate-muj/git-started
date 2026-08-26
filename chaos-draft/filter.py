@@ -103,6 +103,11 @@ MIN_VARIANT_LEN = 4
 ASPIRATE = re.compile(r"(?<=[bcdgjkpstz])h")
 ASPIRATE_MIN_LEN = 5
 
+# Punctuation trimmed from the ends of a word before checking it. Kept separate
+# from the leetspeak map on purpose: several of these characters appear in both,
+# and folding must not happen before trimming.
+TRIM_EDGES = "!?.,;:()[]{}<>\"'`~@#$%^&*+=|\/_-‘’“”"
+
 
 def indexable(word: str) -> list[str]:
     """
@@ -376,8 +381,19 @@ class Dictionary:
         for start, end, tok in tokens:
             if being_typed(start, end):
                 continue
+
+            # Trailing and leading punctuation is not part of the word. It has to
+            # be trimmed BEFORE the leetspeak fold, because some punctuation is
+            # also leetspeak: "!" stands in for "i", so "bsdk!" folded to "bsdki"
+            # and sailed straight through while "bsdk." was caught. Anything
+            # ending in "!" was a hole.
+            trimmed = tok.strip(TRIM_EDGES)
+            offset = tok.find(trimmed) if trimmed else 0
+
             if self.check(tok).decision is not Decision.ALLOW:
                 spans.append((start, end, tok))
+            elif trimmed and trimmed != tok and                     self.check(trimmed).decision is not Decision.ALLOW:
+                spans.append((start + offset, start + offset + len(trimmed), trimmed))
 
         if self.phrases:
             # One normalised word per token, for sequence matching.
