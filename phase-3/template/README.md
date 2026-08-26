@@ -15,7 +15,7 @@ working with colleagues looks like, rather than contributing to a stranger's pro
 5. Wait. The first pull request merges cleanly. Yours probably will not.
 
 Step 5 is the point of the exercise. Full instructions and the fix are in
-[the Phase 3 guide](https://github.com/accelerate-muj/git-started/tree/main/phase-3).
+[the Phase 3 handbook](https://accelerate-muj.github.io/git-started/#phase3).
 
 ## Leader
 

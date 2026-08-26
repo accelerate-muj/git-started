@@ -15,9 +15,10 @@ The split:
 |---|---|
 | [phase-1-script.md](phase-1-script.md) | The opening. Why version control exists, told through one poem and a folder full of `_final` files. |
 
-Phase 2 and Phase 3 keep their delivery notes at the bottom of their own phase
-READMEs, under **Running this phase**, rather than in a separate file here:
-[phase-2](../phase-2/README.md#running-this-phase), [phase-3](../phase-3/README.md).
+Phase 2 keeps its delivery notes at the bottom of its own README, under
+[**Running this phase**](../phase-2/README.md#running-this-phase), rather than in a
+separate file here. Phase 3 has no README at all: it lives entirely in
+[the handbook](https://accelerate-muj.github.io/git-started/#phase3).
 
 ## Timing
 

@@ -417,16 +417,23 @@ ls phase-2/poems/"></pre><button class="cp">copy</button></div></div>
 
 <!-- ===================== PHASE 3 ===================== -->
 <h2 id="phase3"><span class="n">3</span> &nbsp;Teams and conflicts</h2>
-<div class="aim">Same repo, same file, everyone at once. No fork this time.</div>
+<div class="aim">Same repo, same file, everyone at once. No fork this time.
+Roughly 50 minutes, and the conflicts are the exercise rather than an accident.</div>
 
 <div class="step host"><span class="lbl">Leader</span>
 <h3>Create the team repo</h3>
 <div class="cmd"><pre data-cmd="gh repo create team-{{team}} --template accelerate-muj/git-started-team --public --clone
-cd team-{{team}}"></pre><button class="cp">copy</button></div></div>
+cd team-{{team}}"></pre><button class="cp">copy</button></div>
+<p class="tip">A <strong>template</strong> is not a fork. You get the files with a
+fresh history, one commit, and no link back to the original &mdash; what you want
+when starting from a skeleton rather than contributing to someone's project.</p>
+<p class="tip">Pick a leader who owns the repo and merges the PRs. Not the best
+programmer in the group; it is an administrative job, and it is what maintainers of
+every open source project do all day.</p></div>
 
 <div class="step host"><span class="lbl">Leader</span>
 <h3>Add each teammate</h3>
-<div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/collaborators/TEAMMATE-USERNAME"></pre><button class="cp">copy</button></div>
+<div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/collaborators/TEAMMATE-USERNAME -f permission=push"></pre><button class="cp">copy</button></div>
 <p class="tip">Start early, invites take time. Or Settings &rarr; Collaborators &rarr;
 Add people.</p></div>
 
@@ -437,55 +444,120 @@ Add people.</p></div>
 <div class="cmd"><pre data-cmd="gh api -X PATCH user/repository_invitations/INVITATION-ID"></pre><button class="cp">copy</button></div>
 <div class="warn"><b><code>gh repo accept</code> is not a command</b>
 It does not exist. Use the two above, or click the link on
-<a href="https://github.com/notifications" target="_blank" rel="noopener">github.com/notifications</a>.</div></div>
+<a href="https://github.com/notifications" target="_blank" rel="noopener">github.com/notifications</a>.
+Until you accept, your push is rejected with a confusing permission error.</div></div>
 
 <div class="step"><span class="lbl">2</span>
-<h3>Clone, branch, edit the shared file</h3>
+<h3>Clone and branch</h3>
 <div class="cmd"><pre data-cmd="git clone https://github.com/{{leader}}/team-{{team}}.git
 cd team-{{team}}
-git switch -c add-{{name}}"></pre><button class="cp">copy</button></div>
-<p class="tip">Fill in <strong>your</strong> slot in the shared file, then:</p>
-<div class="cmd"><pre data-cmd="git add .
-git commit -m &quot;Add {{name}}&quot;
-git push -u origin add-{{name}}
-gh pr create --title &quot;Add {{name}}&quot; --body &quot;Added my info.&quot;"></pre><button class="cp">copy</button></div>
-<p class="tip">No <code>--repo</code> now. Same repo, branch &rarr; main.</p></div>
+git switch -c line/{{user}}"></pre><button class="cp">copy</button></div>
+<p class="tip">No fork and no <code>upstream</code> this time. You push to
+<code>origin</code> directly because you are inside the project. That is the
+difference between working with colleagues and contributing as a stranger.</p></div>
 
 <div class="step"><span class="lbl">3</span>
+<h3>Edit the shared file</h3>
+<p class="tip">Open <code>team-sonnet.md</code> and do <strong>two</strong> things:</p>
+<ol>
+<li>Rewrite <strong>your assigned line</strong> of the sonnet. The leader hands out
+line numbers, or call them out around the table.</li>
+<li>Add your username to the <strong>Credits</strong> block at the bottom, on the
+line directly under the comment.</li>
+</ol>
+<div class="warn"><b>Everyone writes in the same place on purpose</b>
+That second instruction is what guarantees the conflict. It is the whole exercise.</div></div>
+
+<div class="step"><span class="lbl">4</span>
+<h3>Commit, push, open the PR</h3>
+<div class="cmd"><pre data-cmd="git add team-sonnet.md
+git commit -m &quot;Rewrite line 7, add my name to credits&quot;
+git push -u origin line/{{user}}
+gh pr create --fill"></pre><button class="cp">copy</button></div>
+<p class="tip">No <code>--repo</code> now. Same repo, branch &rarr; main.</p></div>
+
+<div class="step"><span class="lbl">5</span>
 <h3>When GitHub says your branch has conflicts</h3>
 <div class="cmd"><pre data-cmd="git switch main
 git pull origin main
-git switch add-{{name}}
+git switch line/{{user}}
 git merge main"></pre><button class="cp">copy</button></div>
-<p class="tip">Nothing has broken. Your branch was built on an older
-<code>main</code>.</p></div>
+<p class="tip">Nothing has broken. The first PR merged cleanly and yours was built on
+a <code>main</code> that no longer exists. Somebody's name is sitting where you put
+yours, and git will not guess which of you should win.</p></div>
 
-<div class="step"><span class="lbl">4</span>
+<div class="step"><span class="lbl">6</span>
 <h3>Resolve it</h3>
-<div class="out">&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
-your version
+<div class="out">## Credits
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+- @first-person-who-merged
 =======
-what is already on main
-&gt;&gt;&gt;&gt;&gt;&gt;&gt; main</div>
-<p class="tip"><strong>Usually you keep both.</strong> Edit the file, delete the
-three marker lines, then:</p>
-<div class="cmd"><pre data-cmd="git add .
+- @you
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; Rewrite line 7, add my name to credits</div>
+<p class="tip">Three parts. Above <code>=======</code> is what is already on
+<code>main</code>; below it is what you are adding. The markers are plain text git
+inserted, nothing is watching them.</p>
+<div class="warn"><b>A conflict is not a question of who wins</b>
+Almost always the answer is <strong>both</strong>. Keep both names, delete the three
+marker lines.</div>
+<div class="cmd"><pre data-cmd="git add team-sonnet.md
 git commit -m &quot;Resolve conflict, keep both&quot;
-git push origin add-{{name}}"></pre><button class="cp">copy</button></div>
-<p class="tip"><code>git add</code> <em>is</em> how you say resolved. Panicking?
+git push origin line/{{user}}"></pre><button class="cp">copy</button></div>
+<p class="tip"><code>git add</code> <em>is</em> how you say resolved. There is no
+separate resolve command, which surprises everybody. Panicking?
 <code>git merge --abort</code> puts everything back.</p></div>
 
-<div class="step"><span class="lbl">5</span>
+<div class="step"><span class="lbl">7</span>
 <h3>Review and merge each other</h3>
 <div class="cmd"><pre data-cmd="gh pr list
 gh pr diff PR-NUMBER
-gh pr merge PR-NUMBER --merge"></pre><button class="cp">copy</button></div>
+gh pr checkout PR-NUMBER
+gh pr review PR-NUMBER --approve
+gh pr merge PR-NUMBER --squash --delete-branch"></pre><button class="cp">copy</button></div>
+<p class="tip">To send it back instead:
+<code>gh pr review PR-NUMBER --request-changes --body "Line 7 does not scan"</code></p>
 <div class="warn"><b>One PR at a time</b>
 After each merge the next person pulls <code>main</code> and fixes their conflict.
-Five at once and nobody can untangle it.</div>
+Five at once and nobody can untangle it. Notice what merging keeps doing to your
+teammates &mdash; merge order is a decision with consequences for other people, and
+that is most of the job.</div>
 <div class="cmd"><pre data-cmd="git switch main
 git pull origin main
 git log --oneline --graph --all"></pre><button class="cp">copy</button></div></div>
+
+<div class="step"><span class="lbl">+</span>
+<h3>If you have time: rebase instead of merge</h3>
+<div class="cmd"><pre data-cmd="git fetch origin
+git rebase origin/main
+# fix the file, then
+git add team-sonnet.md
+git rebase --continue
+git push --force-with-lease"></pre><button class="cp">copy</button></div>
+<p class="tip"><strong>Merge</strong> keeps your branch as it happened and adds a
+joining commit; honest, and the graph tangles. <strong>Rebase</strong> replays your
+commits on top of the new <code>main</code> so history reads as one line. New commits,
+new hashes, which is why the push needs forcing. The rule most teams settle on:
+<em>rebase your own unmerged branch, merge shared branches.</em></p>
+<div class="warn"><b><code>--force-with-lease</code>, never plain <code>--force</code></b>
+They look interchangeable. <code>--force</code> overwrites the remote branch whatever
+is on it, so if a teammate pushed while you were resolving, you have silently
+destroyed their commit. <code>--force-with-lease</code> checks the remote is still
+where you last saw it and refuses if anyone touched it.</div></div>
+
+<div class="step"><span class="lbl">+</span>
+<h3>If you have time: branch protection</h3>
+<div class="cmd"><pre data-cmd="gh api -X PUT repos/{{leader}}/team-{{team}}/branches/main/protection -F required_pull_request_reviews[required_approving_review_count]=1 -F enforce_admins=false -F restrictions=null -F required_status_checks=null"></pre><button class="cp">copy</button></div>
+<p class="tip">Now nobody can push straight to <code>main</code>, including the
+leader.</p></div>
+
+<div class="note">
+  <b>You should be able to answer</b>
+  What do <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>, <code>=======</code> and
+  <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> separate? Which command marks a conflict
+  resolved? Why was your push rejected after a rebase? What does
+  <code>--force-with-lease</code> check that <code>--force</code> does not? Your
+  teammate merged first and your branch is stale &mdash; merge or rebase?
+</div>
 
 
 <!-- ===================== TROUBLE ===================== -->

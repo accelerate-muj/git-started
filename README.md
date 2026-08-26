@@ -42,7 +42,7 @@ Three green answers and you are ready.
 |---|---|---|---|
 | **1** | [Your own repo](phase-1/) | A repo on your GitHub profile, made from an empty folder | git works on your machine, alone, before GitHub is involved at all |
 | **2** | [Fork and contribute](phase-2/) | A poem file in *this* repo, merged through a pull request | How you contribute to a project you do not own |
-| **3** | [Teams and conflicts](phase-3/) | A shared repo where your edits collide | What happens when two people change the same line, and how you fix it |
+| **3** | [Teams and conflicts](https://accelerate-muj.github.io/git-started/#phase3) | A shared repo where your edits collide | What happens when two people change the same line, and how you fix it |
 
 Phase 2 has no conflicts by design. Phase 3 is nothing but conflicts by design.
 That contrast is the whole point of splitting them.
@@ -115,12 +115,14 @@ of git.
 ## Running this workshop
 
 If you are teaching rather than attending, start with
-[`facilitator/`](facilitator/) for the Phase 1 opening and the running order. Each
-later phase keeps its own delivery notes at the bottom of its README, under
-**Running this phase**: see [phase-2](phase-2/README.md#running-this-phase) for the
-beat by beat, and [phase-3/README.md](phase-3/README.md) for the conflict mechanism
-and why it fires reliably. [CONTRIBUTING.md](CONTRIBUTING.md) has the rule that
-keeps thirty simultaneous pull requests from colliding.
+[`facilitator/`](facilitator/) for the Phase 1 opening and the running order. Phase
+2 keeps its delivery notes at the bottom of its own README, under
+[Running this phase](phase-2/README.md#running-this-phase).
+
+Phase 3 has no README of its own. It lives entirely in
+[the handbook](https://accelerate-muj.github.io/git-started/#phase3), conflict
+mechanism included, along with why it fires reliably. [CONTRIBUTING.md](CONTRIBUTING.md)
+has the rule that keeps thirty simultaneous pull requests from colliding.
 
 See [`handbook/`](handbook/) for the thirteen-phase PDF handbook.
 

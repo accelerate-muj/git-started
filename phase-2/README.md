@@ -494,4 +494,4 @@ branches, which is exactly why this phase needs `gh` and not `git` to make one.
 
 ---
 
-**Next:** [Phase 3](../phase-3/), where we remove the safety net.
+**Next:** [Phase 3](https://accelerate-muj.github.io/git-started/#phase3), in the handbook, where we remove the safety net.
