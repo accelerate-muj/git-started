@@ -109,6 +109,18 @@ class Room:
 
     async def edit(self, ws: WebSocket, name: str, raw_op: dict, base: int,
                    cursor: int | None = None) -> None:
+        """
+        Apply one edit, but only after checking what it adds.
+
+        The check happens BEFORE the edit is applied or broadcast, so a blocked
+        word never reaches the shared page and nobody else ever sees it. The
+        person who typed it is told, and removes it from their own screen.
+
+        The previous order was the other way round: broadcast, then scan, then
+        delete. That put the word on everybody's screen, and on the projector,
+        for the length of a round trip before it vanished. Which is precisely
+        the thing this is supposed to prevent.
+        """
         async with self.lock:
             base = max(0, min(base, self.version))
             op = Op.from_json(raw_op)
@@ -119,49 +131,126 @@ class Room:
 
             # Adjust for everything that landed since this client last heard.
             op = transform_against(op, self.history[base:])
-            self.doc = apply_op(self.doc, op)
+
+            # What the page WOULD look like. Nothing is committed yet.
+            would_be = apply_op(self.doc, op)
+            blocked = self._blocked_in(would_be, op)
+
+            if blocked:
+                # Refused. The page is untouched and no one else is told.
+                self.blocked_count += len(blocked)
+                await self.send(ws, {"type": "refused", "words": blocked,
+                                     "version": self.version, "text": self.doc})
+                await self.broadcast({"type": "blocked_count",
+                                      "blocked": self.blocked_count})
+                for host in list(self.hosts):
+                    await self.send(host, {"type": "caught", "words": blocked,
+                                           "author": name, "micros": 1})
+                return
+
+            self.doc = would_be
             self.history.append(op)
             self.version += 1
 
-            await self.broadcast({"type": "op", "op": op.to_json(),
-                                  "version": self.version, "by": name,
-                                  "len": len(self.doc)})
-
-            # Only look at the document when a word has actually been FINISHED,
-            # meaning this edit added a space, a newline or punctuation. Or when
-            # something was deleted, which can join two words together.
-            #
-            # Scanning on every keystroke was the cause of the whole mess. It
-            # judged half-typed words, so ordinary ones were destroyed partway
-            # through ("assignment" at "ass"), and because any edit rescans the
-            # entire document, one person typing could eat somebody else's
-            # half-written word on the other side of the page. Cursor guards
-            # patched over that and it still felt erratic, because the real
-            # problem was rewriting a document that people are typing into.
-            finished_a_word = op.d > 0 or any(
-                (not ch.isalnum()) and ch not in "'-" for ch in op.i)
-            if finished_a_word:
-                removals, removed_words, micros = self._scrub(cursor)
-            else:
-                removals, removed_words, micros = [], [], 0
-
-        for op in removals:
-            await self.broadcast({"type": "op", "op": op.to_json(),
-                                  "version": self.version, "by": "filter",
-                                  "len": len(self.doc), "filtered": True})
-
-        if removed_words:
-            self.blocked_count += len(removed_words)
-            await self.send(ws, {"type": "scrubbed", "removed": removed_words,
-                                 "micros": micros})
-            await self.broadcast({"type": "blocked_count",
-                                  "blocked": self.blocked_count})
-            for host in list(self.hosts):
-                await self.send(host, {"type": "caught", "words": removed_words,
-                                       "author": name, "micros": micros})
+        await self.broadcast({"type": "op", "op": op.to_json(),
+                              "version": self.version, "by": name,
+                              "len": len(self.doc)})
 
         if len(self.history) > MAX_HISTORY:
             await self.resync_all()
+
+    def _blocked_in(self, candidate: str, op: Op) -> list[str]:
+        """
+        Anything blocked that this edit would ADD, and nothing else.
+
+        Only the region the edit touches is examined, widened a little so a
+        phrase spanning the join is caught. Text elsewhere on the page is
+        somebody else's business and is left alone.
+        """
+        self.dictionary.reload_if_changed()
+
+        start = max(0, op.p - self.PHRASE_WINDOW)
+        end = min(len(candidate), op.p + len(op.i) + 1)
+        window = candidate[start:end]
+        if not window.strip():
+            return []
+
+        hits = []
+        for s0, e0, _why in self.dictionary.scan(window):
+            a, b = s0 + start, e0 + start
+            # Only complain about something the edit actually completed: it has
+            # to overlap what was inserted, and be finished rather than mid-word.
+            touches_edit = a < op.p + len(op.i) and b > op.p - 1
+            after = candidate[b] if b < len(candidate) else " "
+            finished = not (after.isalnum() or after in "'-")
+            if touches_edit and finished:
+                hits.append(candidate[a:b])
+        return hits
+
+    # How far back to look for a phrase ending at the boundary. Long enough for
+    # the longest multi-word entry, short enough to never reach other people.
+    PHRASE_WINDOW = 80
+
+    def _check_completed(self, op: Op) -> tuple[list[Op], list[str], int]:
+        """
+        Check only the word that this edit just finished.
+
+        An edit finishes a word when it inserts something that is not part of one:
+        a space, a newline, or punctuation. The word being finished is whatever
+        sits immediately before that character, so only a small window ending at
+        the insert position is examined.
+
+        A paste can finish several words at once, so the pasted range is examined
+        too. Nothing outside that window is ever touched, which is what stops one
+        person's typing from disturbing anybody else's.
+        """
+        if not op.i or all(ch.isalnum() or ch in "'-" for ch in op.i):
+            return [], [], 0          # still inside a word, nothing finished
+
+        self.dictionary.reload_if_changed()
+
+        # The window runs from a little before the edit to the end of what was
+        # inserted, so a pasted sentence is covered as well as a typed space.
+        start = max(0, op.p - self.PHRASE_WINDOW)
+        end = min(len(self.doc), op.p + len(op.i))
+        window = self.doc[start:end]
+        if not window.strip():
+            return [], [], 0
+
+        spans = [(s0 + start, e0 + start, why)
+                 for s0, e0, why in self.dictionary.scan(window)]
+
+        # Keep only what is genuinely finished: the span must be followed by a
+        # non-word character in the document, which is exactly the boundary that
+        # was just typed.
+        finished = []
+        for s0, e0, why in spans:
+            after = self.doc[e0] if e0 < len(self.doc) else " "
+            if not (after.isalnum() or after in "'-"):
+                finished.append((s0, e0, why))
+        if not finished:
+            return [], [], 0
+
+        ops: list[Op] = []
+        words: list[str] = []
+        for s0, e0, why in reversed(finished):
+            words.append(self.doc[s0:e0])
+            cut = Op(p=s0, d=e0 - s0, i="")
+            self.doc = apply_op(self.doc, cut)
+            self.history.append(cut)
+            self.version += 1
+            ops.append(cut)
+
+        # Tidy the double space left behind, but only right where we cut.
+        for m in reversed(list(re.finditer(r"[ 	]{2,}", self.doc[start:end + 4]))):
+            cut = Op(p=start + m.start(), d=m.end() - m.start(), i=" ")
+            self.doc = apply_op(self.doc, cut)
+            self.history.append(cut)
+            self.version += 1
+            ops.append(cut)
+
+        words.reverse()
+        return ops, words, 1
 
     def _scrub(self, cursor: int | None = None) -> tuple[list[Op], list[str], int]:
         """

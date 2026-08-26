@@ -293,7 +293,6 @@ function setDoc(text, v){
 
 /* ---------- sending local edits ---------- */
 
-let settleTimer = null;
 
 /*
   Sync, using the standard one-outstanding-operation model.
@@ -326,26 +325,40 @@ function sendIfIdle(){
                           cursor: paper.selectionStart}));
 }
 
-function localChanged(){
+/*
+  Nothing leaves this device until a word is finished.
+
+  While you are mid-word the text is local only, so nobody else sees it and it
+  cannot appear on the projector. The moment you type a space, newline or
+  punctuation, the finished word goes to the server, which either accepts it and
+  tells everyone, or refuses it and tells only you.
+
+  A blocked word therefore never reaches another person's screen at all. It used
+  to be broadcast first and deleted a moment later, which put it in front of the
+  whole room for the length of a round trip.
+
+  The wait is one round trip on the space bar, about 15ms on a laptop and well
+  under a tenth of a second hosted, so it does not read as a delay.
+*/
+function finishesAWord(text){
+  return [...text].some(ch => !(/[\p{L}\p{N}]/u.test(ch) || ch === "'" || ch === "-"));
+}
+
+function localChanged(e){
   grow();
   countWords();
-  sendIfIdle();
 
-  // Typing stopped. One more pass with nothing protected, so a word left
-  // half-written and abandoned is still checked.
-  clearTimeout(settleTimer);
-  settleTimer = setTimeout(() => {
-    if (ws && ws.readyState === WebSocket.OPEN)
-      ws.send(JSON.stringify({type:"settle"}));
-  }, 700);
+  const typed = (e && e.data) || "";
+  const deleting = e && String(e.inputType || "").startsWith("delete");
+
+  // Send on a finished word, on paste, or when a deletion joins things up.
+  if (finishesAWord(typed) || deleting || (e && e.inputType === "insertFromPaste"))
+    sendIfIdle();
 }
 paper.addEventListener("input", localChanged);
 
-// Clicking or arrowing away finishes the word, so check it now.
-paper.addEventListener("blur", () => {
-  if (ws && ws.readyState === WebSocket.OPEN)
-    ws.send(JSON.stringify({type:"settle"}));
-});
+// Leaving the box finishes whatever word you were on.
+paper.addEventListener("blur", sendIfIdle);
 
 /* ---------- receiving ---------- */
 
@@ -407,6 +420,28 @@ function connect(){
           && paper.value.length !== m.len){
         ws.send(JSON.stringify({type:"sync"}));
       }
+    }
+
+    // Refused. It never went anywhere, so just put this screen back in step.
+    else if (m.type === "refused"){
+      const caret = paper.selectionStart;
+      let text = paper.value;
+      for (const w of m.words){
+        const at = text.lastIndexOf(w, caret);
+        if (at !== -1) text = text.slice(0, at) + text.slice(at + w.length);
+      }
+      text = text.replace(/[ 	]{2,}/g, " ");
+      paper.value = text;
+      shadow = m.text;
+      version = m.version;
+      outstanding = null;
+      const put = Math.min(caret, text.length);
+      paper.setSelectionRange(put, put);
+      paper.classList.add("flash");
+      setTimeout(() => paper.classList.remove("flash"), 500);
+      notice(m.words.length === 1 ? "Not that one." : "Not those.", true);
+      grow(); countWords();
+      sendIfIdle();
     }
 
     else if (m.type === "scrubbed"){
