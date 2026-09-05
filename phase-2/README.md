@@ -22,7 +22,6 @@ moving on.
 | 2.8 | Your copy, frozen at fork time, gets synced |
 | 2.9 | Branch pushed becomes a request to include it |
 | 2.10 | Request reviewed, accepted, our repository changes |
-| 2.11 | Two people, one line, first accepted, second refused |
 
 ---
 
@@ -312,8 +311,7 @@ git merge upstream/main
 ```
 
 `Already up to date.` for now. This is the habit that stops your work from quietly
-contradicting somebody else's an hour later, and 2.11 is the consequence of skipping
-it.
+contradicting somebody else's an hour later.
 
 ## 2.9: the request
 
@@ -349,8 +347,7 @@ branch first. The branch *is* the unit being compared, which is why there is no 
 commit selector anywhere in the interface.
 
 It is not frozen at creation either. If our repository changes while your request is
-open, the comparison updates live against wherever we now stand. That behaviour is
-exactly what makes 2.11 possible.
+open, the comparison updates live against wherever we now stand.
 
 ```bash
 gh pr list --repo accelerate-muj/git-started
@@ -384,55 +381,9 @@ designed, for one contributor at a time.
 usernames are unique. Thirty requests merged in a row and not one touched a line
 another one touched. That was not luck, that was the filename rule doing its job.
 
-## 2.11: two people, one line, no warning
-
-Now we break it on purpose.
-
-**Setup:** two volunteers, A and B, both on branches made *before* the last merge.
-Both add their name to the same block of the one file everybody shares.
-
-```bash
-git switch main
-git switch -c sign/<your-github-username>
-```
-
-Open [`signatures.md`](signatures.md) and add your name as the **first** line under
-`## Signed by`, so both of you are inserting at the identical point. Then both:
-
-```bash
-git add phase-2/signatures.md
-git commit -m "Sign the sonnet"
-git push -u origin sign/<your-github-username>
-gh pr create --repo accelerate-muj/git-started --fill
-```
-
-Two open requests. Merge A's:
-
-```bash
-gh pr merge <A-number> --repo accelerate-muj/git-started --merge
-```
-
-Clean. Now B's, which is still comparing against a version of that block that no
-longer exists:
-
-```bash
-gh pr merge <B-number> --repo accelerate-muj/git-started --merge
-```
-
-Refused:
-
-```
-This branch has conflicts that must be resolved
-```
-
-**Do not fix it.** B did nothing wrong: forked correctly, branched, committed, opened
-a clean request. **Ask the room, and leave it hanging:** "So why is this being
-refused?"
-
-Land only this much. A shared live document would have silently blended both edits
-and told nobody. Git refuses to guess which version survives, because guessing wrong
-and saying nothing is how you lose work you did not know you had lost. Whether that
-is the right tradeoff, and how you actually resolve it, is in the handbook.
+Which leaves the obvious question, and we are deliberately leaving it open: what
+happens the day two of you genuinely need to change the same line? That is a real
+problem with a real answer, and it is the whole of the next workshop.
 
 ---
 
@@ -450,8 +401,6 @@ is the right tradeoff, and how you actually resolve it, is in the handbook.
 7. What can a shared live document not do that a pull request does automatically?
 8. Can a pull request send only some of your branch's commits? What would you do if
    you wanted fewer?
-9. Thirty people merged with no conflicts, then two collided immediately. What was
-   different?
 
 ---
 
@@ -502,8 +451,6 @@ gh pr list --repo accelerate-muj/git-started
 gh pr review <number> --repo accelerate-muj/git-started --approve
 gh pr merge <number> --repo accelerate-muj/git-started --merge
 
-# 2.11 staged collision, second merge refused on purpose
-gh pr merge <B-number> --repo accelerate-muj/git-started --merge
 ```
 
 ---
@@ -522,7 +469,6 @@ gh pr merge <B-number> --repo accelerate-muj/git-started --merge
 | Request opened against your own fork | `--repo` was left off | Re-run with `--repo`, or run `gh repo set-default` once | 2.9 |
 | Two forks under your name | `gh repo fork` was run twice | `gh repo delete <your-github-username>/git-started` | 2.7 |
 | Bot says your filename is wrong | It is not `phase-2/poems/<your-github-username>.md` | Rename, commit, push again. It does not block the merge | 2.9 |
-| `This branch has conflicts that must be resolved` | Two merges touched the identical line | Expected. That is 2.11, and the resolution is in the handbook | 2.11 |
 
 ---
 
@@ -540,7 +486,6 @@ gh pr merge <B-number> --repo accelerate-muj/git-started --merge
 | 2.8 sync with upstream | 5 min |
 | 2.9 the request | 12 min |
 | 2.10 accepted | 5 min |
-| 2.11 staged collision | 8 min |
 | Buffer | 10 min |
 
 **Total: roughly 92 minutes.**
