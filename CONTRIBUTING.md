@@ -80,10 +80,10 @@ Things to raise as an issue first, before writing anything:
 
 ### Handbook contributions
 
-The handbook is LaTeX, in [`handbook/src/`](handbook/src/). Build it with:
+The handbook is LaTeX, in [`docs/src/`](docs/src/). Build it with:
 
 ```bash
-cd handbook && make
+cd docs && make
 ```
 
 You need a TeX distribution (TeX Live, MiKTeX, or MacTeX). The first build is slow

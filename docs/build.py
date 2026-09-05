@@ -21,9 +21,9 @@ import sys
 from pathlib import Path
 
 SRC = Path(__file__).parent / "src"
-# Built into docs/, so GitHub Pages serves them at a real URL and the
+# Built alongside the site, so GitHub Pages serves them at a real URL and the
 # split-screen handbook can link straight to a phase.
-OUT = Path(__file__).parent.parent / "docs" / "handbook"
+OUT = Path(__file__).parent / "handbook"
 JUNK = (".aux", ".log", ".out", ".toc", ".synctex.gz", ".fls", ".fdb_latexmk")
 
 

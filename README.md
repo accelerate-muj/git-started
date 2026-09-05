@@ -90,7 +90,7 @@ which job stops most of the confusion before it starts.
 
 ## After the workshop
 
-[`handbook/`](handbook/) contains **Rabbit Holes**, a set of PDFs picking up at
+[`docs/`](docs/) contains **Rabbit Holes**, a set of PDFs picking up at
 Phase 4 and running well past anything covered in the session: rewriting history,
 recovering work you thought you destroyed, bisecting to find the commit that broke
 the build, running a project as a maintainer, and what a commit actually is
@@ -111,6 +111,6 @@ Phase 3 has no README of its own. It lives entirely in
 mechanism included, along with why it fires reliably. [CONTRIBUTING.md](CONTRIBUTING.md)
 has the rule that keeps thirty simultaneous pull requests from colliding.
 
-See [`handbook/`](handbook/) for the thirteen-phase PDF handbook.
+See [`docs/`](docs/) for the thirteen-phase PDF handbook, its LaTeX source, and the site that serves it.
 
 Licensed MIT. Fork it, run it at your own club, change whatever you like.

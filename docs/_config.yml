@@ -1,0 +1,7 @@
+# The handbook source lives here so the book is one unit, but the site
+# only needs the built PDFs and index.html.
+exclude:
+  - src
+  - build.py
+  - Makefile
+  - README.md
