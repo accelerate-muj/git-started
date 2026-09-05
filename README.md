@@ -9,17 +9,6 @@ new thing in front of you at any moment is the git.
 
 ---
 
-## Before we start: Chaos Draft
-
-Fifteen minutes before the session proper, everyone writes one story together, one
-word each, no turn order. It falls apart quickly, which is the intention. A bot
-reads every word before it lands and eats the ones that should not be there, in
-English and Hindi, in about eight microseconds.
-
-It runs on one laptop over the room wifi. See [`chaos-draft/`](chaos-draft/).
-
----
-
 ## Before you arrive
 
 Do [SETUP.md](SETUP.md). It takes ten minutes and it is the difference between
@@ -40,12 +29,12 @@ Three green answers and you are ready.
 
 | | Phase | You will build | The idea |
 |---|---|---|---|
-| **1** | [Your own repo](phase-1/) | A repo on your GitHub profile, made from an empty folder | git works on your machine, alone, before GitHub is involved at all |
-| **2** | [Fork and contribute](phase-2/) | A poem file in *this* repo, merged through a pull request | How you contribute to a project you do not own |
+| **1** | [git, and only git](phase-1/) | A real history in a folder on your own laptop | git works alone, offline, before GitHub is involved at all |
+| **2** | [Publish, then contribute](phase-2/) | Your own repo on GitHub, then a poem file merged into *this* one | Publishing something you own, then getting a change into something you do not |
 | **3** | [Teams and conflicts](https://accelerate-muj.github.io/git-started/#phase3) | A shared repo where your edits collide | What happens when two people change the same line, and how you fix it |
 
-Phase 2 has no conflicts by design. Phase 3 is nothing but conflicts by design.
-That contrast is the whole point of splitting them.
+Phase 1 never touches the network. Phase 2 is where GitHub arrives, and it ends on a
+merge conflict we cause on purpose and deliberately do not resolve.
 
 ---
 
@@ -74,10 +63,10 @@ Sonnet 18, William Shakespeare, 1609. Out of copyright, so do what you like to i
 
 **Why the same poem three times.** It is fourteen lines, everybody half knows the
 first one, and reusing it means the poem is never the new thing you are learning.
-The git is. In Phase 2 you write your own version of it. In Phase 3 your team
-rewrites it together and stands on each other's toes doing it.
+The git is. In Phase 1 you edit it offline, and in Phase 2 you write your own version
+of it and get that version merged into this repository.
 
-The numbered copy lives in [`poem/sonnet-18.md`](poem/sonnet-18.md).
+The numbered copy lives in [`phase-2/sonnet-18.md`](phase-2/sonnet-18.md).
 
 ---
 
@@ -114,10 +103,8 @@ of git.
 
 ## Running this workshop
 
-If you are teaching rather than attending, start with
-[`facilitator/`](facilitator/) for the Phase 1 opening and the running order. Phase
-2 keeps its delivery notes at the bottom of its own README, under
-[Running this phase](phase-2/README.md#running-this-phase).
+If you are teaching rather than attending, each phase README carries its own running
+order, the questions to ask the room, and per subphase timings.
 
 Phase 3 has no README of its own. It lives entirely in
 [the handbook](https://accelerate-muj.github.io/git-started/#phase3), conflict

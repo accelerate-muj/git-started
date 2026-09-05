@@ -1,497 +1,550 @@
-# Phase 2: fork, branch, pull request
+# Phase 2: publish your own, then contribute to ours
 
-**Roughly 40 minutes.** You will add a file to *this* repository, which you do not
-have permission to write to, by forking it and opening a pull request.
+**Roughly 90 minutes.** Two halves, one question asked twice: *what does it take to
+get a change from your machine into a repository other people can see?*
 
-Nobody in this phase will hit a merge conflict. That is deliberate, and Phase 3
-will fix it.
+First about a repository you own, where the answer turns out to be almost nothing.
+Then about one you do not own, which is the entire rest of this phase.
+
+Every step states what is true **before** the command, the command, and what is true
+**after**. If you cannot say what changed, run it again and look properly before
+moving on.
+
+| Subphase | What changes |
+|---|---|
+| 2.1 | No repo, try to publish, refused |
+| 2.2 | Untracked folder becomes tracked, staged, committed |
+| 2.3 | Committed locally becomes live on GitHub, under your name |
+| 2.4 | *(no command)* why nobody gets direct write access to a shared repo |
+| 2.5 | Locked repo cloned, branched, edited, committed, entirely locally |
+| 2.6 | Push attempted against the locked repo, refused |
+| 2.7 | A copy you own is constructed, the same push succeeds |
+| 2.8 | Your copy, frozen at fork time, gets synced |
+| 2.9 | Branch pushed becomes a request to include it |
+| 2.10 | Request reviewed, accepted, our repository changes |
+| 2.11 | Two people, one line, first accepted, second refused |
 
 ---
 
-## Step 0: try it the obvious way first
+# Part A: publishing something you own
 
-You have your own repo from Phase 1. Now you want to contribute to somebody
-*else's*. The obvious plan is: download it, edit it, upload it. Try that:
+In Phase 1 you built a history in `Git-Started` and then deliberately stopped. It is
+still on your laptop, invisible to everyone. This half is the one way trip from there
+to a real URL, with nobody else involved at any point.
+
+We start in a fresh folder rather than `Git-Started`, because the first thing worth
+seeing is what happens when you try to publish a folder git has never touched, and
+`Git-Started` is already a repository.
+
+## 2.1: try to publish it, and let the refusal explain itself
+
+**Before:** a folder with a file in it. No `.git`. No relationship to GitHub of any
+kind.
+
+```bash
+mkdir my-notes
+cd my-notes
+echo "Things I learned tonight" > notes.md
+gh repo create my-notes --private --source=. --push
+```
+
+**After:** nothing exists on GitHub. Refused:
+
+```
+current directory is not a git repository. Run `git init` to initialize it
+```
+
+`gh` never contacted GitHub at all. It checked exactly one thing, got the answer no,
+and stopped before opening a single connection.
+
+**Ask the room:** "What precisely is missing here?" Not permissions. Not an account.
+A commit. That is the whole gap. Nothing is refusing *you*, there is simply nothing
+saved yet to send.
+
+## 2.2: save it properly, before anyone else is involved
+
+**Before:** no `.git`, as just established.
+
+```bash
+git init
+git status
+```
+
+Everything shows as untracked. Git can see the folder and has recorded nothing about
+it yet, exactly as in Phase 1.
+
+**Every way to stage, and what each one actually does:**
+
+| Command | What it stages |
+|---|---|
+| `git add <file>` | one named file |
+| `git add folder/` | everything inside that folder |
+| `git add .` | everything at or below where you are standing |
+| `git add -A` | everything in the whole repo including deletions, wherever you stand |
+| `git add -p` | each changed hunk one at a time, accept or skip individually |
+
+```bash
+git add .
+git commit -m "Initial commit"
+```
+
+**A shortcut with a real trap in it:**
+
+```bash
+git commit -am "message"
+```
+
+That stages and commits in one step, but only for files git **already knows about**.
+
+**Ask the room:** "You create a brand new file after your last commit. Does `-am` pick
+it up?" It does not, and it does not warn you either. New files always need an
+explicit `git add` first, however well drilled the `-am` habit gets. This is the most
+common "wait, where did my file go" moment in any buildathon.
+
+## 2.3: run the identical command again
+
+**Before:** one local commit exists. Still nothing on GitHub.
+
+```bash
+gh repo create my-notes --private --source=. --push
+```
+
+**After:** a repository exists on GitHub under your account, `origin` is configured
+locally pointing at it, and your commit exists in both places.
+
+**Ask the room:** "Compare that command, character for character, with 2.1's." They
+are identical. Only the folder underneath it changed. The command was telling the
+truth about its precondition the entire time.
+
+`Git-Started` from Phase 1 is already a repository, so the same one line publishes it
+whenever you want it on your profile:
+
+```bash
+cd ../Git-Started
+gh repo create my-poems --public --source=. --push
+```
+
+**Hold on to what just happened, because Part B inverts it.** You went from invisible
+to live and owned by you, and there was nobody to ask, because the thing had no owner
+but you. Part B is a repository that already has an owner, and it is not you.
+
+**Two starting points this command handles:**
+
+```bash
+# Mode 1: the code already exists locally, which is what you just did
+gh repo create <name> --private --source=. --remote=origin --push
+
+# Mode 2: nothing exists yet, let GitHub build the folder
+gh repo create <name> --private --clone
+```
+
+Mode 2 makes an empty repository on GitHub *and* clones it down as a new folder, and
+you move files in afterwards. Use Mode 1 whenever the code came first, which is most
+of the time.
+
+**The full flag set:**
+
+| Group | Flags |
+|---|---|
+| Visibility, pick exactly one | `--public`, `--private`, `--internal` (orgs only) |
+| Metadata | `--description "<text>"`, `--homepage <url>` |
+| Source and output | `--source <path>`, `--clone`, `--remote <name>`, `--push` |
+| Scaffolding for a fresh repo | `--add-readme`, `--gitignore <template>`, `--license <template>` |
+| Org | `--team <name>` |
+| Templates | `--template <owner/repo>`, `--include-all-branches` |
+| Feature toggles | `--disable-issues`, `--disable-wiki` |
+
+**One caveat.** `--add-readme`, `--gitignore` and `--license` assume you are building
+from nothing. Combine them with `--source` on a folder that already has commits and
+they will not do what you expect, because that folder has already decided what is in
+it. Real `.gitignore` work, and what to do about a secret that has already reached a
+commit, is in the handbook.
+
+**What `--push` actually replaced:**
+
+```bash
+git remote add origin https://github.com/<you>/<name>.git
+git branch -M main
+git push -u origin main
+```
+
+Three lines, one flag. Nothing more magical than that.
+
+---
+
+# Part B: contributing to something you do not own
+
+## 2.4: why nobody just gets write access
+
+No command for this one.
+
+**Ask the room:** "We are collecting one poem file from every person here, into this
+repository. Simplest possible setup: give all forty of you write access. What
+breaks?"
+
+Land it properly. One careless push overwrites somebody else's work. Nobody can tell
+who broke what without reading the entire history. And there is no point at which
+anyone looks at a change *before* it is in the project, because it is in the project
+the moment it is pushed. That is true at forty people and just as true at two, the
+moment more than one person cares what the final version says.
+
+**The fix is not "be more careful".** It is structural. Nobody writes into the real
+repository directly. Everyone proposes from a copy they own, and exactly one person
+decides what actually lands. Everything below is that structure, one piece at a time.
+
+## 2.5: clone it and do real work, nothing stops you yet
+
+**Before:** `accelerate-muj/git-started` exists and you are not a collaborator on it.
 
 ```bash
 git clone https://github.com/accelerate-muj/git-started.git
 cd git-started
-echo "test" >> README.md
-git commit -am "Try to edit"
-git push origin main
+git switch -c poem/<your-github-username>
 ```
 
-```
-Permission denied
-```
+**Watch the folder name.** Your Phase 1 folder is `Git-Started` and this clone is
+`git-started`. On Windows and Mac those look identical to you and different to the
+terminal. Run `pwd` if you are ever unsure which one you are standing in, because
+ten minutes of typing into the wrong folder is the single most common way to lose
+this part of the evening.
 
-You downloaded the repo onto your laptop fine. You just have no upload access. You
-got read, not write. So your changes exist on your laptop and nowhere else — and if
-they are not on GitHub, there is nothing to open a pull request *about*.
-
-This is not an obstacle to work around, it is how essentially every open source
-project on earth stays sane: strangers cannot write to the project directly, but
-anyone can propose a change.
-
-**Before the next step, delete this clone or `cd` out of it.** Otherwise you will
-end up with two `git-started` folders and spend ten minutes typing into the wrong
-one.
-
-## The fix, in one sentence
-
-Make your own copy on GitHub, one you *can* write to. Push there. Then ask us to
-pull your work into ours.
-
-Think of Google Docs. Somebody shares a document and you cannot edit it. What do
-you do? **File → Make a Copy.** Now there is a copy in your Drive and you can do
-whatever you like to it.
-
-On GitHub, that Make a Copy button is called **Fork**. The mechanism has three
-parts:
-
-1. **Fork.** Your own server side copy of the whole repo, which you fully control.
-2. **Branch.** A named line of work inside that copy.
-3. **Pull request.** A request that we pull your branch into our repo, plus a place
-   to discuss it before anyone does.
-
-## Step 1: fork and clone in one command
-
-You can press Fork in the browser, or do both jobs with one command:
+Now write your file. One file, named after your GitHub username:
 
 ```bash
-gh repo fork accelerate-muj/git-started --clone
-cd git-started
+echo "# Sonnet 18, my way" > phase-2/poems/<your-github-username>.md
 ```
 
-That single command makes your copy on GitHub *and* downloads it to your laptop.
-GitHub does not duplicate the whole thing on disk — it stores only the differences,
-and it records a relationship between the original and your copy. That relationship
-is what makes the pull request possible later.
-
-## Step 2: two copies, two names
-
-You now have two copies: yours, which you can push to, and ours, which you want to
-contribute to. Typing a full URL every time would be miserable.
-
-So git lets you save a long URL under a short name — the same way your phone has
-`Mom` saved against `+91-98765...`. In git's vocabulary that saved name is a
-**remote**.
-
-Forking set up two of them for you. Check:
+Put whatever you like in it. Sonnet 18 in modern English, in Hindi or Hinglish, as a
+group chat, as a parody keeping the rhyme scheme, or a straight annotation of what
+each line means. There is a worked example in [`poems/`](poems/).
 
 ```bash
+git diff
+git add phase-2/poems/<your-github-username>.md
+git commit -m "Add <your-github-username>'s take on Sonnet 18"
+```
+
+Note `git add` with the actual filename rather than `git add .`. It is a good reflex:
+`git add .` stages everything, including the three files you forgot you touched.
+
+**Ask the room:** "Did any of that fail, warn you, or ask permission?" No. Clone,
+branch, edit, diff, commit: every one ran entirely on your own machine and never once
+checked whether you are allowed to touch our copy. Whatever "you do not have access"
+is going to mean, it clearly is not about any of this.
+
+## 2.6: push, which is the first thing that actually checks
+
+**Before:** a commit exists locally on your branch. `origin` still points at our
+repository, unchanged since you cloned.
+
+```bash
+git push -u origin poem/<your-github-username>
+```
+
+**After:** nothing changed remotely. Refused:
+
+```
+remote: Permission to accelerate-muj/git-started.git denied
+fatal: unable to access ... 403
+```
+
+**Ask the room:** "You were not stopped at clone, or branch, or edit, or commit. Only
+here. What does that tell you about what git is actually protecting?"
+
+Land it: nothing you do on your own machine is ever restricted. The one locked door
+is the moment you try to write into a copy you do not own. Your commit is not lost.
+It is exactly where you left it. It just has nowhere to go yet.
+
+## 2.7: construct a copy you actually own
+
+**Before:** a local commit that cannot reach anywhere but your laptop.
+
+```bash
+gh repo fork accelerate-muj/git-started
 git remote -v
 ```
 
-- **`origin`** points at *your* fork. You can push here.
-- **`upstream`** points at *our* repo. You cannot push here, but you can fetch from it.
-
-`origin` must show **your** username. If it says `accelerate-muj`, you cloned ours
-instead of forking, and everything after this will fail confusingly. Fix it now.
-
-Remote names are per folder, not global — every repo has its own `.git/config`, so
-every folder gets its own `origin` and they never collide.
-
-If `upstream` is missing, which happens occasionally, add it yourself:
+`origin` still resolves to `accelerate-muj/git-started`, because forking does not
+retroactively rewire a clone you made before you forked. Fix the labels so they mean
+what they normally mean:
 
 ```bash
-git remote add upstream https://github.com/accelerate-muj/git-started.git
+git remote rename origin upstream
+git remote add origin https://github.com/<your-github-username>/git-started.git
+git remote -v
 ```
 
-That pair of names is a near universal convention. When you read a project's
-contributing guide and it says "sync with upstream", this is what it means.
+```
+origin    https://github.com/<your-github-username>/git-started.git
+upstream  https://github.com/accelerate-muj/git-started.git
+```
 
-## Step 3: catch up, then branch
+That naming pair is a near universal convention. When a project's contributing guide
+says "sync with upstream", this is what it means.
 
-Our repo may have moved since you made your copy. Catch up first:
+Now push the exact same commit that failed a moment ago:
+
+```bash
+git push -u origin poem/<your-github-username>
+```
+
+It works.
+
+**Ask the room:** "What is actually different between this push and the one that just
+failed?" Nothing about the commit. It is byte for byte identical. The only thing that
+changed is what `origin` resolves to. That is the entire function of a fork: not a
+copy of your work, a copy of the *destination*, one with your name on it that you are
+allowed to write into.
+
+*(Next time: `gh repo fork accelerate-muj/git-started --clone` does the fork, the
+clone and both remotes in one line. Worth doing it by hand once so the shortcut is
+not a mystery.)*
+
+## 2.8: your copy does not update itself
+
+**Before:** your fork is frozen at whatever our repository looked like the moment you
+forked it. Thirty other people are merging work in tonight and your fork has no idea
+unless you ask.
 
 ```bash
 git fetch upstream
 git merge upstream/main
 ```
 
-If nothing changed it says **"Already up to date"**, which is a fine answer.
+`Already up to date.` for now. This is the habit that stops your work from quietly
+contradicting somebody else's an hour later, and 2.11 is the consequence of skipping
+it.
 
-`fetch` downloads and changes none of your files. `merge` is the half that touches
-them. Most people meet these two welded together as `git pull` and never find out
-they are separable.
+## 2.9: the request
 
-Now branch. Editing `main` directly is risky — if it goes wrong, your `main` is the
-thing that is wrong. A branch is a safety net: if it goes badly you delete the
-branch and `main` was never touched.
-
-```bash
-git checkout -b add-<your-github-username>
-```
-
-Check you are actually on it:
+**Ask the room:** "You want us to add your file. In a shared live document, what is
+the actual built in mechanism for proposing a change without simply making it?"
+Suggesting mode is the closest thing, and it still lives inside the one document
+everybody is editing at once. There is no version of it where you hold your own
+complete copy and ask for it to be brought in.
 
 ```bash
-git branch
+gh pr create \
+  --repo accelerate-muj/git-started \
+  --title "Add <your-github-username>" \
+  --body "My take on Sonnet 18."
 ```
 
-The `*` sits next to your branch.
+This is a computed object, not a claim. GitHub compares your branch against ours and
+produces an exact, reviewable difference. That is the real reason this whole fork
+structure exists rather than handing out write access: it is the only arrangement
+where a change can be inspected *before* it lands.
 
-> **Modern alternative:** `git switch -c add-<your-github-username>`.
-> `git checkout` is the old command and it does several unrelated jobs, which is
-> exactly why it confused people for a decade. `git switch` only switches branches.
-> You will read `checkout` in every Stack Overflow answer you ever open, so you need
-> to recognise it. `switch` is the one to type.
-
-## Step 4: write your file, and sign it
-
-Create exactly one file, named after your GitHub username:
+**`--repo` is the address on the envelope.** Your terminal has never heard of us.
+Leave it off and the request files against your own fork, where it does nothing:
 
 ```bash
-echo "Hi, I'm <your-name>. I'm learning Git at this workshop!" > phase-2/poems/<your-github-username>.md
+gh repo set-default accelerate-muj/git-started
 ```
 
-Then open that file, write your version of Sonnet 18 in it, and put this line at
-the end:
+**Ask the room:** "Your branch has five commits on it. Does the request send all five,
+or do you choose?" You do not choose. It sends the full difference between your
+branch and ours, every time. If you want fewer commits in it, take them off the
+branch first. The branch *is* the unit being compared, which is why there is no per
+commit selector anywhere in the interface.
 
-```
-Written by <your-name>
-```
-
-Some versions that have worked well:
-
-- Sonnet 18 rewritten in modern English
-- Sonnet 18 rewritten in Hindi, or Hinglish, or your first language
-- Sonnet 18 as a group chat
-- A parody with the same rhyme scheme
-- A straight annotation explaining what each line means
-
-There is a worked example in [`poems/`](poems/) if you want to see the shape of one.
-
-**Everything you touch goes in that one file.** Your username is unique on GitHub,
-so no two people can create the same file, so nobody's change can overlap with
-anybody else's. Thirty pull requests will merge in a row without a single collision.
-Sign your own file, not `poem/sonnet-18.md` — editing a file everybody shares is
-Phase 3's job, and doing it here just invents Phase 3 forty minutes early.
-
-## Step 5: look at what you changed
+It is not frozen at creation either. If our repository changes while your request is
+open, the comparison updates live against wherever we now stand. That behaviour is
+exactly what makes 2.11 possible.
 
 ```bash
-git status
-git diff
-```
-
-`git status` calls your file **untracked**. And `git diff` shows you *nothing* —
-which surprises almost everybody.
-
-That is correct behaviour. `git diff` only looks at files git is already tracking,
-and your file is brand new. Git has not been introduced to it yet.
-
-Stage it, then look again:
-
-```bash
-git add .
-git diff --staged
-```
-
-Now the whole file appears with a `+` in front of every line, including
-`+ Written by <your-name>`. **The `+` means addition.** If you had deleted
-something you would see a `-`.
-
-`git add .` needs the space. `git add.` is not a command and fails.
-
-## Step 6: commit and push to your fork
-
-```bash
-git commit -m "Add <your-name>'s take on Sonnet 18"
-```
-
-Check it landed:
-
-```bash
-git log --oneline -1
-```
-
-Your commit is on top.
-
-Now, where does that commit get uploaded? Not our repo — no permission. Your copy.
-That is `origin`. First time, with `-u`:
-
-```bash
-git push -u origin add-<your-github-username>
-```
-
-**What `-u` does:** it creates a tracked link between your local branch and the
-remote one. After that git knows which remote branch you mean, so from then on bare
-`git push` and `git pull` work with no arguments. In Phase 1, `gh repo create
---push` did this for you invisibly. This is the first time you have done it by hand.
-
-## Step 7: why you could not skip straight to the pull request
-
-Worth asking before you run the next command: why push first? Why not just open the
-PR?
-
-Because **a pull request is not an upload command. It is a comparison** — between
-two branches that are both already on GitHub. If your work only exists on your
-laptop, there is nothing on GitHub to compare against, and GitHub will tell you
-there is nothing to compare.
-
-**The order is fixed: commit → push → pull request.**
-
-## Step 8: open the pull request
-
-The base command is:
-
-```bash
-gh pr create
-```
-
-Everything else is answering questions GitHub still has.
-
-**Where does this PR go?** You worked on your copy, but the PR has to land on ours.
-Because `upstream` is configured, `gh` works this out on its own — it can see you
-are contributing from a fork and aims at the original. You do not have to say
-anything. If `gh` ever gets confused and picks the wrong repo, force it with
-`--repo accelerate-muj/git-started`.
-
-**Which branch into which branch?** Source is your current branch, which `gh`
-detects. Destination defaults to `main`, which is what you want here. Neither needs
-specifying.
-
-**What is the title?** That is the line that shows up in the PR list, so keep it
-short and clear. Write it with `--title`, and give it a description with `--body`,
-which is what people see when they open the PR.
-
-The other flags, for when you are doing this on real work:
-
-| Flag | When you want it |
-|---|---|
-| `--fill` | Auto-fill title and body from your last commit message |
-| `--draft` | Work is unfinished and you want early feedback. Cannot merge until you click "Ready for review" |
-| `--reviewer <username>` | Request a review from a specific person |
-| `--assignee <username>` | Put the PR in somebody's name |
-| `--label documentation` | Tag it |
-| `--web` | Skip the terminal and fill GitHub's PR form in a browser |
-| `--repo <owner>/<repo>` | Force the destination when `gh` guesses wrong |
-
-So the smallest command that works today is:
-
-```bash
-gh pr create --title "Add <your-name>" --body "Added my poem file and signed it."
-```
-
-Or, the lazy and perfectly effective version:
-
-```bash
-gh pr create --fill
-```
-
-Check it exists:
-
-```bash
-gh pr list
-gh pr status
+gh pr list --repo accelerate-muj/git-started
 gh pr view --web
 ```
 
-A bot will comment within a minute confirming your file is named correctly. It does
-not block anything, it just means whoever is merging can move fast.
+A bot comments within a minute confirming your filename is right. It does not block
+anything, it just means whoever is merging can move quickly.
 
-## Step 9: watch it merge
+## 2.10: we accept it
 
-Your PR gets merged live. When it does, your file is in the real repository, with
-your name in the contributor list, permanently and publicly.
+```bash
+gh pr review <number> --repo accelerate-muj/git-started --approve
+gh pr merge <number> --repo accelerate-muj/git-started --merge
+```
 
-Then update your local copy:
+Your file is now in the real repository, publicly, with your name against it. Catch
+your own copy up:
 
 ```bash
 git switch main
-gh repo sync <your-github-username>/git-started
-git pull
+git fetch upstream
+git merge upstream/main
 ls phase-2/poems/
 ```
 
-You now have everyone else's files too. Your fork was behind by thirty commits and
-`gh repo sync` caught it up.
+You now have everybody else's files too. That is the full loop working exactly as
+designed, for one contributor at a time.
 
----
+**Why nobody conflicted.** Every person wrote to a different filename, because GitHub
+usernames are unique. Thirty requests merged in a row and not one touched a line
+another one touched. That was not luck, that was the filename rule doing its job.
 
-## If you want to go further in this phase
+## 2.11: two people, one line, no warning
 
-**Review somebody else's:**
+Now we break it on purpose.
 
-```bash
-gh pr list
-gh pr view <number>
-gh pr checkout <number>
-```
-
-That last one puts their branch on your machine so you can actually run and read
-their work, then `git switch main` to come back. Reviewing code you can only see as
-a diff in a browser is much harder than people admit.
-
-**Comment on one:**
+**Setup:** two volunteers, A and B, both on branches made *before* the last merge.
+Both add their name to the same block of the one file everybody shares.
 
 ```bash
-gh pr comment <number> --body "This rhyme in line 4 is very good"
+git switch main
+git switch -c sign/<your-github-username>
+```
+
+Open [`signatures.md`](signatures.md) and add your name as the **first** line under
+`## Signed by`, so both of you are inserting at the identical point. Then both:
+
+```bash
+git add phase-2/signatures.md
+git commit -m "Sign the sonnet"
+git push -u origin sign/<your-github-username>
+gh pr create --repo accelerate-muj/git-started --fill
+```
+
+Two open requests. Merge A's:
+
+```bash
+gh pr merge <A-number> --repo accelerate-muj/git-started --merge
+```
+
+Clean. Now B's, which is still comparing against a version of that block that no
+longer exists:
+
+```bash
+gh pr merge <B-number> --repo accelerate-muj/git-started --merge
+```
+
+Refused:
+
+```
+This branch has conflicts that must be resolved
+```
+
+**Do not fix it.** B did nothing wrong: forked correctly, branched, committed, opened
+a clean request. **Ask the room, and leave it hanging:** "So why is this being
+refused?"
+
+Land only this much. A shared live document would have silently blended both edits
+and told nobody. Git refuses to guess which version survives, because guessing wrong
+and saying nothing is how you lose work you did not know you had lost. Whether that
+is the right tradeoff, and how you actually resolve it, is in the handbook.
+
+---
+
+## Comprehension checkpoint
+
+1. What exactly does `gh repo create --source=.` need before it will even talk to
+   GitHub?
+2. Will `git commit -am` catch a file you created five minutes ago?
+3. State the real difference between the failed `gh repo create` in 2.1 and the
+   successful one in 2.3.
+4. Why is "just give everyone write access" dangerous rather than merely untidy?
+5. Every command in 2.5 succeeded. What does that tell you about what git protects,
+   and when?
+6. What is genuinely different between the refused push and the successful one?
+7. What can a shared live document not do that a pull request does automatically?
+8. Can a pull request send only some of your branch's commits? What would you do if
+   you wanted fewer?
+9. Thirty people merged with no conflicts, then two collided immediately. What was
+   different?
+
+---
+
+## Condensed command reference
+
+```bash
+# 2.1 try to publish, observe the refusal
+mkdir my-notes && cd my-notes
+echo "Things I learned tonight" > notes.md
+gh repo create my-notes --private --source=. --push
+
+# 2.2 save it properly
+git init
+git status
+git add .                # or -A, or a path, or -p to review hunks
+git commit -m "Initial commit"
+
+# 2.3 same command, changed precondition, live
+gh repo create my-notes --private --source=. --remote=origin --push
+
+# 2.5 clone ours, work entirely locally
+git clone https://github.com/accelerate-muj/git-started.git
+cd git-started
+git switch -c poem/<your-github-username>
+echo "# Sonnet 18, my way" > phase-2/poems/<your-github-username>.md
+git add phase-2/poems/<your-github-username>.md
+git commit -m "Add <your-github-username>'s take on Sonnet 18"
+
+# 2.6 push fails
+git push -u origin poem/<your-github-username>
+
+# 2.7 fork, rewire remotes, push again
+gh repo fork accelerate-muj/git-started
+git remote rename origin upstream
+git remote add origin https://github.com/<your-github-username>/git-started.git
+git push -u origin poem/<your-github-username>
+
+# 2.8 sync with the real thing
+git fetch upstream
+git merge upstream/main
+
+# 2.9 the request
+gh pr create --repo accelerate-muj/git-started \
+  --title "Add <your-github-username>" --body "My take on Sonnet 18."
+gh pr list --repo accelerate-muj/git-started
+
+# 2.10 accepted
+gh pr review <number> --repo accelerate-muj/git-started --approve
+gh pr merge <number> --repo accelerate-muj/git-started --merge
+
+# 2.11 staged collision, second merge refused on purpose
+gh pr merge <B-number> --repo accelerate-muj/git-started --merge
 ```
 
 ---
 
-## You should now be able to answer
+## Troubleshooting
 
-1. What is the difference between `origin` and `upstream`?
-2. Why did the filename rule guarantee nobody would conflict?
-3. Why did `git diff` show nothing until you ran `git add`?
-4. Why can you not open a pull request before pushing?
-5. Your fork is thirty commits behind. What command fixes that?
-6. Is a pull request a git feature or a GitHub feature?
-
-That last one catches people. Pull requests are **not** part of git. Git has no
-idea what a PR is. It is a GitHub product built on top of git branches, which is
-exactly why you need `gh` and not `git` to make one.
+| Symptom | Cause | Fix | Subphase |
+|---|---|---|---|
+| `current directory is not a git repository` | No commit exists yet | `git init`, `git add`, `git commit`, then re-run the same command | 2.1 to 2.3 |
+| File missing after `git commit -am` | It was never staged before | `git add <file>` explicitly, then commit | 2.2 |
+| `gh repo create` says the name already exists | Collides with a repo you already own | Pick another name, or `gh repo delete <old>` | 2.3 |
+| `--gitignore` or `--license` did nothing | Combined with `--source` on a folder that already has commits | Those are for repositories built from nothing. See the handbook | 2.3 |
+| `Permission denied` on push | `origin` still points at our repository | Fork, rename it to `upstream`, add your fork as `origin` | 2.6 to 2.7 |
+| `fatal: not a git repository` | You are not inside the cloned folder | `cd git-started` | 2.5 |
+| `remote origin already exists` | You added `origin` before renaming the old one | `git remote rename origin upstream` first | 2.7 |
+| Request opened against your own fork | `--repo` was left off | Re-run with `--repo`, or run `gh repo set-default` once | 2.9 |
+| Two forks under your name | `gh repo fork` was run twice | `gh repo delete <your-github-username>/git-started` | 2.7 |
+| Bot says your filename is wrong | It is not `phase-2/poems/<your-github-username>.md` | Rename, commit, push again. It does not block the merge | 2.9 |
+| `This branch has conflicts that must be resolved` | Two merges touched the identical line | Expected. That is 2.11, and the resolution is in the handbook | 2.11 |
 
 ---
 
-## Running this phase
+## Timing
 
-**For whoever is presenting.** Everything above is the participant path. This part
-is the delivery: the order to reveal it in, the questions to ask out loud, and the
-lines that make it land. Told out loud it runs the full 40 minutes including hands
-on time.
-
-The Hinglish below is how it is actually said in the room. Do not put it on a slide
-— the moment it is on screen they read ahead and the pauses stop working.
-
-### The shape of it
-
-**Let them hit the wall first, then hand them the tool.** Every step above is an
-answer to a question they have just felt. Introduce nothing before the problem it
-solves.
-
-### Beat by beat
-
-**Step 0, the wall.** Let them actually run the failing push. The temptation is to
-warn them first and save two minutes. Do not — `Permission denied` is the only thing
-that makes fork feel like a solution rather than a ritual.
-
-> Aapne repo apne laptop pe download toh kar liya, but upload access nahi hai. Aapne
-> sirf read kiya, write permission nahi hai. Toh aapke changes sirf aapke laptop pe
-> hain, GitHub pe nahi. Aur GitHub pe nahi hoga toh PR bhi nahi hoga.
-
-**Ask the room:** so where is your work right now? Wait for somebody to say "on my
-laptop". That is the whole problem stated in four words.
-
-Then make them delete the clone before Step 1. Otherwise they end up with two
-`git-started` folders and spend ten minutes typing into the wrong one. This is the
-single biggest time sink in the phase.
-
-**Step 1, Make a Copy.** The analogy is what makes it land:
-
-> Google Docs ki tarah socho. Kisi ne document banaya hai, aapko edit nahi karne
-> denge. Toh aap kya karte ho? File → Make a Copy. Ab aapke Drive mein ek copy aa
-> gayi, aap usme kuch bhi kar sakte ho. GitHub pe yeh "Make a Copy" ka button hai.
-
-> Yeh ek hi command GitHub pe aapki copy banata hai aur laptop pe download bhi kar
-> deta hai. Copy banate waqt GitHub sirf differences copy karta hai, saara data nahi
-> — aur original repo aur aapki copy ke beech ek relationship establish karta hai.
-
-Say that last sentence slowly. A fork is not a duplicate sitting on a disk
-somewhere, and it is not disconnected from us. It is a copy that remembers where it
-came from, which is exactly what makes the pull request possible later.
-
-**Step 2, remotes.** The phone contact analogy does the work:
-
-> Har baar poora URL type karna mushkil hai. Isliye Git ek system deta hai — aap ek
-> lambi URL ko ek chhote naam se save kar sakte ho, jaise phone mein "Mom" save
-> karte ho +91-98765... ke liye. Is saved naam ko Git ki bhasha mein "remote" kehte
-> hain.
-
-> Yeh naam per-folder hota hai, global nahi — har folder ka apna `.git/config` hai,
-> toh har folder ka `origin` alag hota hai, collision nahi hota.
-
-**This is the beat people quietly miss.** If somebody's `origin` says
-`accelerate-muj`, they cloned ours instead of forking, and every command after this
-fails in a confusing way. Catch it here, not at the push.
-
-**Step 3, fetch and branch.** Worth naming the split out loud: `fetch` downloads and
-changes nothing, `merge` is the part that touches your files. Most people meet these
-two welded together as `git pull` and never learn they are separable.
-
-> Directly `main` pe edit karna risky hai — agar kuch galat ho gaya toh main kharab
-> ho jayega. Branch ek safety net hai. Agar kuch galat hua, branch delete karo, main
-> safe rahega.
-
-Show `git checkout -b` and `git switch -c` both. They will read `checkout` in every
-Stack Overflow answer they ever open, so they need to recognise it; `switch` is what
-they should type.
-
-**Step 4, the file.** The filename rule is not bureaucracy, so give it its reason:
-
-> GitHub pe aapka username unique hai, toh koi do log same file nahi bana sakte.
-> Matlab kisi ka change kisi se takrayega nahi. Tees pull requests, ek ke baad ek,
-> bina kisi conflict ke merge ho jayenge.
-
-If somebody signs `poem/sonnet-18.md` instead of their own file, they have just
-invented Phase 3 forty minutes early. Send them back.
-
-**Step 5, the empty diff.** Let it land as a surprise before you explain it:
-
-> `git diff` sirf un files ko dekhta hai jinhe Git already track kar raha hai. Aapki
-> file bilkul nayi hai — Git ne use abhi tak dekha hi nahi. Isliye diff khaali hai.
-
-Then `git add .` and `git diff --staged`, and point at the `+`. Every added line
-carries one; a deletion would carry `-`.
-
-**Step 6, `-u`.** Callback to Phase 1 — `gh repo create --push` did this same thing
-for them invisibly. This is the first time they do it by hand.
-
-> `-u` tracked link banata hai between local branch aur remote branch. Uske baad Git
-> jaanta hai ki jab aap `git push` ya `git pull` chalaoge, toh yeh remote branch hai
-> jisse baat karni hai.
-
-**Step 7, ask it before you answer it.** Somebody always wonders why they cannot go
-straight to the pull request.
-
-> PR ek upload command nahi hai. PR ek comparison hai — do branches jo GitHub pe
-> already hain unke beech. Agar code sirf laptop pe hai, GitHub pe nahi, toh compare
-> kya karega? Kuch nahi milega. Order fixed hai: commit → upload → PR.
-
-**Step 8, build the command, do not hand it over.** Start from bare `gh pr create`
-and ask what GitHub still needs to know. Where does it go? Which branch into which
-branch? What is the title? Each flag is an answer to one of those questions, and
-because `upstream` is set, most of them answer themselves.
-
-> Agar aapne `upstream` configure kiya hai, toh `gh` itna smart hai ki automatically
-> samajh jaata hai — "haan, yeh banda fork se contribute kar raha hai, PR original
-> repo pe bhejna hai." Kuch specify karne ki zaroorat nahi.
-
-Then merge them live, on the projector, one at a time. Watching their own name
-appear in a repository that is not theirs is the moment the phase pays off, and it
-only works if they can see it happen.
-
-### The three lines that carry it
-
-1. "GitHub pe yeh Make a Copy ka button hai."
-2. "PR ek upload command nahi hai. PR ek comparison hai."
-3. "Order fixed hai: commit → upload → PR."
-
-### Where it maps
-
-| The beat | What it answers |
+| Subphase | Time |
 |---|---|
-| `Permission denied` at Step 0 | Why forks exist at all |
-| The phone contact analogy | Why `origin` and `upstream` are words and not URLs |
-| The branch as safety net | Sets up Phase 3, where the safety net is what gets tested |
-| "PR is a comparison" | The "There isn't anything to compare" error, when it arrives |
-| One file per username | Why Phase 3 conflicts at all, by removing exactly this rule |
+| 2.1 try, get refused | 5 min |
+| 2.2 save it properly | 8 min |
+| 2.3 publish, full flag tour | 10 min |
+| 2.4 why not just hand out access | 6 min |
+| 2.5 clone and work locally | 8 min |
+| 2.6 push, hit the wall | 5 min |
+| 2.7 fork, rewire, push again | 10 min |
+| 2.8 sync with upstream | 5 min |
+| 2.9 the request | 12 min |
+| 2.10 accepted | 5 min |
+| 2.11 staged collision | 8 min |
+| Buffer | 10 min |
 
-### Where the 40 minutes actually go
-
-The commands take ten. The rest goes on people who cloned instead of forked (Step 2
-catches them), people in the wrong folder (Step 0's housekeeping note), and waiting
-for thirty pull requests to appear. Start Step 8's flag discussion while the slow
-half are still pushing.
-
-**When somebody asks whether a pull request is a git thing** — no, and say it
-plainly. Git has no idea what a PR is. It is a GitHub product built on top of git
-branches, which is exactly why this phase needs `gh` and not `git` to make one.
+**Total: roughly 92 minutes.**
 
 ---
 
-**Next:** [Phase 3](https://accelerate-muj.github.io/git-started/#phase3), in the handbook, where we remove the safety net.
+The sonnet all of this is built on is [`sonnet-18.md`](sonnet-18.md), in this folder.

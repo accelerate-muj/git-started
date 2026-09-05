@@ -1,27 +1,32 @@
-# Phase 1: your own repo
+# Phase 1: git, and only git
 
-**Roughly 30 minutes.** You will make a repository on your own machine, put a poem
-in it, and push it to your GitHub profile.
+**Roughly 30 minutes.** You will make a repository on your own machine and build a
+real history inside it.
 
-No forking, no pull requests, no other people. Just you and the tool.
+GitHub does not appear in this phase. No account, no browser, no internet. Not as a
+teaser, and not because we ran out of time: the whole point is that everything below
+works with your wifi switched off.
 
 ---
 
 ## Why we start offline
 
 Almost everyone learns GitHub first and git second, and then spends years quietly
-unsure which one is doing what. So for the next fifteen minutes, GitHub does not
+unsure which one is doing what. So for the next thirty minutes, GitHub does not
 exist. Git is a program on your computer that records versions of a folder. It
 worked this way for three years before GitHub was founded, and it still works with
 no internet connection at all.
+
+Phase 2 is where the other half arrives: publishing what you built here, and then
+getting a change into a repository somebody else owns.
 
 ---
 
 ## Step 1: make a folder and claim it
 
 ```bash
-mkdir my-sonnet
-cd my-sonnet
+mkdir Git-Started
+cd Git-Started
 git init
 ```
 
@@ -38,23 +43,23 @@ entire project including all of its past.
 
 ## Step 2: write something
 
-Copy [the sonnet](../poem/sonnet-18.md) into a file called `sonnet.md`, then change
-something. Rewrite a line in your own words, add a line of your own at the bottom,
-translate a couplet into Hindi. It genuinely does not matter. You need a file with
-your fingerprints on it.
+Copy [the sonnet](../phase-2/sonnet-18.md) into a file called `poems.txt`, then
+change something. Rewrite a line in your own words, add a line of your own at the
+bottom, translate a couplet into Hindi. It genuinely does not matter. You need a
+file with your fingerprints on it.
 
 ```bash
 git status
 ```
 
-Git says `sonnet.md` is **untracked**. It can see the file but it is not watching it
+Git says `poems.txt` is **untracked**. It can see the file but it is not watching it
 yet. Git never assumes you want a file recorded, which is why build output and
 password files do not end up in your history by accident.
 
 ## Step 3: stage it
 
 ```bash
-git add sonnet.md
+git add poems.txt
 git status
 ```
 
@@ -95,67 +100,93 @@ Three lines, newest at the top. You have a history. This is the loop you will
 repeat for the rest of your life as a programmer: change something, stage it,
 describe it, record it.
 
+## Step 6: see exactly what changed
+
+Edit `poems.txt` again, but do not stage it yet.
+
+```bash
+git diff
+```
+
+Lines starting `-` are what was there. Lines starting `+` are what you replaced them
+with. Now stage it and run the same command:
+
+```bash
+git add poems.txt
+git diff
+```
+
+Nothing. `git diff` shows what is **unstaged**, and you just staged it all. To see
+what is about to go into the commit instead:
+
+```bash
+git diff --staged
+```
+
+Two questions, two commands. "What have I changed but not shelved yet" and "what is
+on the shelf right now". Mixing these up is the single most common early confusion.
+
+## Step 7: work somewhere other than main
+
+```bash
+git switch -c experiment
+```
+
+You are now on a branch called `experiment`. Rewrite the sonnet badly, on purpose.
+Commit it.
+
+```bash
+git switch main
+cat poems.txt
+```
+
+Your bad rewrite is gone, and your good version is back, because the two commits
+live on two different branches. Nothing was lost. Switch back and look:
+
+```bash
+git switch experiment
+cat poems.txt
+```
+
+A branch is not a copy of your folder. It is a movable label pointing at one commit,
+and `git switch` rewrites the files in your folder to match whatever that label
+points at. That is why switching is instant even on a huge project.
+
+```bash
+git switch main
+git merge experiment
+```
+
+If you liked the experiment, `merge` brings it into `main`. If you did not, delete
+the branch with `git branch -d experiment` and nothing about `main` ever knew it
+existed.
+
 ---
 
-## Step 6: now GitHub exists
-
-Your repo is real and complete, and it is only on your laptop. To put it online the
-long way you would create a repo in the browser, copy its URL, add it as a remote,
-and push. The GitHub CLI collapses all of that:
+## Where your work lives right now
 
 ```bash
-gh repo create my-sonnet --source=. --public --push
+git log --oneline --all
 ```
 
-Read the flags, because this is the most useful command in this whole phase:
+Everything you just did is inside one `.git` folder on one laptop. Not backed up.
+Not visible to anyone. If this machine dies tonight, so does all of it, and there is
+no version of you that can prove any of this work happened.
 
-- `--source=.` use the repo already in this folder rather than making an empty one
-- `--public` anyone can see it
-- `--push` upload the commits immediately
-
-Open it:
-
-```bash
-gh repo view --web
-```
-
-Your three commits are on the internet, with your name on them.
-
-## Step 7: understand what just got wired up
-
-```bash
-git remote -v
-```
-
-`origin` is a nickname for a URL. It is not special, it is just the conventional
-name for "the copy of this project that I consider the main one". A repo can have
-several remotes with any names you like, which is exactly what Phase 2 uses.
-
-Make one more change, commit it, and push:
-
-```bash
-git add .
-git commit -m "One more edit"
-git push
-```
-
-It just works, with no arguments, because `--push` set up the tracking relationship
-between your local `main` and `origin/main`.
+That is not a flaw. It is just the half of the tool you have learned so far. Phase 2
+is the other half: getting this onto the internet under your name, and then getting
+a change of yours into a repository you do not own.
 
 ---
 
 ## You should now be able to answer
 
-1. What is actually inside `.git`, and what happens if you delete it?
-2. What is the difference between `git add` and `git commit`?
-3. Why does `git push` need no arguments after the first time?
-4. Where does your history live if GitHub goes down tomorrow?
-
-That last one has a nicer answer than people expect. Every clone is a full copy of
-the entire history. A project with forty contributors has forty complete backups
-that nobody had to plan for. That is what "distributed" in "distributed version
-control" means.
+1. What exactly is the `.git` folder, and what happens if you delete it?
+2. Why does git make you `add` before you `commit`? Name a case where that helps.
+3. What is the difference between `git diff` and `git diff --staged`?
+4. A branch is not a copy of your files. So what is it?
+5. Where does your history live right now, and who else can see it?
 
 ---
 
-**Next:** [Phase 2](../phase-2/), where you contribute to a repo you do not own.
+**Next:** [Phase 2](../phase-2/), where GitHub finally shows up.

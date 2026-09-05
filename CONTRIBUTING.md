@@ -13,7 +13,7 @@ phase-2/poems/<your-github-username>.md
 ```
 
 Nothing else in the same pull request. Do not edit anyone else's file, the phase
-READMEs, `poem/sonnet-18.md`, or anything at the root. Your version of the sonnet
+READMEs, `phase-2/sonnet-18.md`, or anything at the root. Your version of the sonnet
 and the `Written by <your-name>` line that signs it both go inside that one file.
 
 The rule exists for a mechanical reason. Thirty people are submitting at the same
