@@ -12,11 +12,12 @@
   will take everybody there. Change the doc between sessions without ever
   touching the slides.
 
-  Share the doc as "Anyone with the link" set to VIEWER, not editor.
-  The point of the activity is that nobody can type into it.
+  Share the doc as "Anyone with the link" set to COMMENTER.
+  Commenter is the one that matches GitHub: the room can read everything and
+  propose changes, and nothing they type lands in the document itself.
 -->
 <script>
-  var TARGET = "";               // <-- paste the Google Doc share link here
+  var TARGET = "https://docs.google.com/document/d/1KwOuWozmAmZ3OKuyvmuRCYcXhckVQJkvH4YvjveQQA4/edit";
   if (TARGET) location.replace(TARGET);
 </script>
 <style>
@@ -36,8 +37,8 @@
     <h1>No document is <span class="flare">set yet.</span></h1>
     <p>Whoever is running the session: open <code>docs/doc/index.html</code>, paste the
        Google Doc share link into <code>TARGET</code>, and commit.</p>
-    <p>Share that doc as <b>Anyone with the link &rarr; Viewer</b>. The whole point of the
-       first activity is that nobody in the room can type into it.</p>
+    <p>Share that doc as <b>Anyone with the link &rarr; Commenter</b>. The whole point of the
+       first activity is that what the room types becomes a suggestion, not the document.</p>
   </div>
 </body>
 </html>
