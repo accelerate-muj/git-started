@@ -60,25 +60,12 @@ it does two unrelated jobs and that is exactly why it confused everyone for a de
 | `git push` | Send your commits up |
 | `git push -u origin <branch>` | Push a new branch and remember the pairing |
 
-`fetch` is safe and never changes your files. `pull` is `fetch` plus a merge, which
-can conflict. When you want to know what changed upstream without any risk, fetch.
+`fetch` is safe and never changes your files. `pull` is `fetch` plus a merge, so it
+does change them. When you only want to know what changed upstream, fetch.
 
 Remote names are per folder, not global. Every repo has its own `.git/config`, so
 every folder gets its own `origin`. By convention `origin` is your fork and
 `upstream` is the project you forked from.
-
-## Conflicts
-
-| Command | What it does |
-|---|---|
-| `git status` | Which files are conflicted |
-| `git diff` | Show the conflicting regions |
-| `git add <file>` | Mark a conflict as resolved |
-| `git rebase --continue` | Carry on after resolving during a rebase |
-| `git merge --abort` | Undo the merge, go back to before |
-| `git rebase --abort` | Same, for a rebase |
-
-Nothing is ever lost while you are in a conflict. `--abort` always exists.
 
 ---
 
