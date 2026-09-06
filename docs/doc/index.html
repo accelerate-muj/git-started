@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Started — the shared report</title>
+<!--
+  The opening activity of phase 2 sends the whole room to one document.
+
+  Put the Google Doc URL in TARGET below, commit, and the short link
+      accelerate-muj.github.io/git-started/doc
+  will take everybody there. Change the doc between sessions without ever
+  touching the slides.
+
+  Share the doc as "Anyone with the link" set to VIEWER, not editor.
+  The point of the activity is that nobody can type into it.
+-->
+<script>
+  var TARGET = "";               // <-- paste the Google Doc share link here
+  if (TARGET) location.replace(TARGET);
+</script>
+<style>
+  :root{ color-scheme: dark; }
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:#0a0a0a;color:#fff;font-family:'Space Grotesk',system-ui,sans-serif;padding:8vw}
+  .card{max-width:60ch}
+  h1{font-size:clamp(28px,5vw,48px);line-height:1.1;margin:0 0 20px}
+  .flare{color:#ff5c63}
+  p{font-size:clamp(16px,2vw,20px);line-height:1.6;color:#b9bdc4;margin:0 0 14px}
+  code{font-family:'JetBrains Mono',Consolas,monospace;color:#fff;background:#131317;
+    padding:2px 7px;border-radius:4px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>No document is <span class="flare">set yet.</span></h1>
+    <p>Whoever is running the session: open <code>docs/doc/index.html</code>, paste the
+       Google Doc share link into <code>TARGET</code>, and commit.</p>
+    <p>Share that doc as <b>Anyone with the link &rarr; Viewer</b>. The whole point of the
+       first activity is that nobody in the room can type into it.</p>
+  </div>
+</body>
+</html>
